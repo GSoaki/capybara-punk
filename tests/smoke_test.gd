@@ -140,9 +140,10 @@ func run_host() -> void:
 	var damaged := func() -> bool: return not is_instance_valid(vase) or vase.net_value < vase_value
 	check("impacto reduz valor", await wait_until(damaged, 3.0))
 
-	# Dano do servidor chega ao dono com knockback.
+	# Dano do servidor chega ao dono com knockback e ativa ragdoll na rig.
+	check("rig com 6 ossos criada", me.rig != null and me.rig.skeleton.get_bone_count() == 6)
 	remote.server_hit(20, Vector3(0.0, 4.0, 6.0))
-	check("cliente derrubado", await wait_until(func() -> bool: return remote.net_knocked, 4.0))
+	check("cliente derrubado em ragdoll", await wait_until(func() -> bool: return remote.net_knocked and remote.rig.is_ragdoll, 4.0))
 
 	# Modularidade do corpo: destacar membro gera Prop físico e implantar membro altera atributos.
 	check("força inicial com 2 braços = 350", is_equal_approx(me.get_grip_force(), 350.0))

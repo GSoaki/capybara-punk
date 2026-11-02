@@ -18,6 +18,7 @@ const PUSH_STRENGTH := 2.5
 const SPRINT_NOISE := 0.06
 const BODY_INTERACT_RANGE := 3.8
 const THIRD_PERSON_OFFSET := Vector3(0.4, 0.3, 2.6)
+const PlayerRigScript := preload("res://scripts/player/player_rig.gd")
 ## O primeiro movimento após capturar o mouse traz o salto do cursor até o centro da janela.
 const MOUSE_SETTLE_SECONDS := 0.1
 
@@ -71,8 +72,10 @@ var net_sprinting := false
 var net_knocked := false
 var net_flashlight := false
 var net_hold_distance := 2.0
+var net_holding := false
 
 var _knock_timer := 0.0
+var _last_knock_impulse := Vector3.ZERO
 var _exhausted := false
 var _spawn_position := Vector3.ZERO
 var _prev_fall_speed := 0.0
@@ -88,6 +91,7 @@ var _part_cache: Dictionary = {}
 @onready var flashlight: SpotLight3D = $Head/Flashlight
 @onready var ray: RayCast3D = $Head/InteractRay
 @onready var visuals: Node3D = $Visuals
+@onready var rig: PlayerRigScript = $Visuals/Rig
 @onready var collider: CollisionShape3D = $Collider
 @onready var name_label: Label3D = $NameLabel
 @onready var voice_output: VoiceOutput = $VoiceOutput
@@ -116,6 +120,7 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	collider.shape = collider.shape.duplicate()
 	ray.add_exception(self)
+	rig.setup_rig(_slot_meshes, get_rid())
 	net_position = position
 	_spawn_position = position
 	Net.roster_changed.connect(_refresh_identity)
@@ -308,6 +313,8 @@ func _refresh_body_visuals() -> void:
 			mat.roughness = 0.7
 		mesh_node.material_override = mat
 	visuals.position.y = -0.55 if get_leg_count() == 0 else 0.0
+	if is_instance_valid(rig):
+		rig.refresh_active_parts(self)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -440,8 +447,13 @@ func _process(delta: float) -> void:
 		_update_camera_view(delta)
 	elif not is_local():
 		head.rotation.x = lerp_angle(head.rotation.x, net_pitch, 1.0 - exp(-15.0 * delta))
-	var tilt := -PI * 0.5 if net_knocked else 0.0
-	visuals.rotation.x = lerp_angle(visuals.rotation.x, tilt, 1.0 - exp(-10.0 * delta))
+	var want_ragdoll := net_knocked or not alive
+	if want_ragdoll and not rig.is_ragdoll:
+		rig.start_ragdoll(self, _last_knock_impulse)
+	elif not want_ragdoll and rig.is_ragdoll:
+		rig.stop_ragdoll()
+	if not rig.is_ragdoll:
+		rig.update_pose(delta, self, net_crouching, net_sprinting, net_holding, head.rotation.x, voice_level)
 
 
 func _physics_process(delta: float) -> void:
@@ -558,6 +570,7 @@ func _publish_state(crouching: bool, sprinting: bool) -> void:
 	net_crouching = crouching
 	net_sprinting = sprinting
 	net_knocked = _knock_timer > 0.0
+	net_holding = is_instance_valid(held_prop)
 
 
 func _update_hover() -> void:
@@ -761,8 +774,11 @@ func _receive_knock(knock: Vector3) -> void:
 	if Net.sender_id() != 1:
 		return
 	velocity = knock
+	_last_knock_impulse = knock
 	_knock_timer = 1.5
 	release_grab(false)
+	if is_instance_valid(rig):
+		rig.start_ragdoll(self, knock)
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -772,6 +788,9 @@ func _revive(spawn_position: Vector3) -> void:
 	health = 100
 	stamina = 100.0
 	_knock_timer = 0.0
+	_last_knock_impulse = Vector3.ZERO
+	if is_instance_valid(rig):
+		rig.stop_ragdoll()
 	_set_alive(true)
 	net_position = spawn_position
 	global_position = spawn_position
@@ -798,7 +817,7 @@ func _set_alive(value: bool) -> void:
 	collider.set_deferred("disabled", not value)
 	if is_local():
 		camera.top_level = not value
-		visuals.visible = value and third_person
+		visuals.visible = third_person or not value
 		if value:
 			camera.transform = Transform3D.IDENTITY
 			_update_camera_view(1.0)
@@ -806,8 +825,12 @@ func _set_alive(value: bool) -> void:
 			release_grab(false)
 			net_flashlight = false
 	else:
-		visuals.visible = value
+		visuals.visible = true
 		name_label.visible = value
+	if not value and is_instance_valid(rig):
+		rig.start_ragdoll(self, _last_knock_impulse)
+	elif value and is_instance_valid(rig):
+		rig.stop_ragdoll()
 
 
 func send_voice(packet: PackedByteArray) -> void:
