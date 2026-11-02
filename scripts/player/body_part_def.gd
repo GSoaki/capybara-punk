@@ -58,3 +58,17 @@ static func is_arm_slot(p_slot: Slot) -> bool:
 
 static func is_leg_slot(p_slot: Slot) -> bool:
 	return p_slot == Slot.LEFT_LEG or p_slot == Slot.RIGHT_LEG
+
+
+static func pair_slot(p_slot: Slot) -> int:
+	match p_slot:
+		Slot.LEFT_ARM:
+			return Slot.RIGHT_ARM
+		Slot.RIGHT_ARM:
+			return Slot.LEFT_ARM
+		Slot.LEFT_LEG:
+			return Slot.RIGHT_LEG
+		Slot.RIGHT_LEG:
+			return Slot.LEFT_LEG
+	return -1
+

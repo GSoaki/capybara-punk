@@ -2,7 +2,7 @@ class_name ItemDef
 extends Resource
 ## Dados de um item encontrado no chão. Crie um .tres e adicione a item_table da cena main.
 
-enum Kind { NONE, REVOLVER, BATON, GRENADE, AMMO }
+enum Kind { NONE, REVOLVER, BATON, GRENADE, AMMO, FLASHLIGHT }
 
 @export var kind := Kind.AMMO
 @export var display_name := "Item"

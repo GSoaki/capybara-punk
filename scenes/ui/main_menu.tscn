@@ -53,6 +53,11 @@ text = "Endereço do host"
 unique_name_in_owner = true
 layout_mode = 2
 
+[node name="DisableEnemies" type="CheckBox" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Desativar inimigos (para teste)"
+
 [node name="Buttons" type="HBoxContainer" parent="Center/Panel/Margin/Box"]
 layout_mode = 2
 

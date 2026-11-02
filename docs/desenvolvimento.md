@@ -2,7 +2,7 @@
 
 Template de co-op 3D em primeira pessoa para Godot 4.7.2, sem assets externos e sem dependências nativas. A geometria é greybox e o projeto é GDScript puro. O loop é o do gênero: até 8 amigos entram numa instalação gerada por seed, carregam loot com física até o van, fogem de um monstro que escuta a voz deles e tentam bater uma quota crescente.
 
-⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 153 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
+⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 168 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
 
 ## Como rodar
 

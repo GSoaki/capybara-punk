@@ -7,6 +7,7 @@ enum Phase { LOBBY, RUN, RESULTS }
 signal state_changed
 signal run_started(level_seed: int)
 signal run_ended(success: bool)
+signal enemies_disabled_changed(disabled: bool)
 ## Somente no servidor. Monstros escutam este sinal.
 signal noise_emitted(origin: Vector3, loudness: float)
 
@@ -23,6 +24,8 @@ var time_left := 0.0
 var last_success := false
 var last_collected := 0
 var last_quota := 0
+## Opção para desativar inimigos (para testes).
+var enemies_disabled := false
 
 ## peer_id -> Player
 var players: Dictionary = {}
@@ -120,6 +123,40 @@ func emit_noise(origin: Vector3, loudness: float) -> void:
 
 func send_state_to(peer_id: int) -> void:
 	_receive_state.rpc_id(peer_id, phase, day, quota, collected, time_left)
+	_sync_enemies_disabled.rpc_id(peer_id, enemies_disabled)
+
+
+func set_enemies_disabled(disabled: bool) -> void:
+	if not Net.in_session:
+		enemies_disabled = disabled
+		enemies_disabled_changed.emit(disabled)
+		return
+	if multiplayer.is_server():
+		_apply_enemies_disabled_server(disabled)
+	else:
+		request_set_enemies_disabled.rpc_id(1, disabled)
+
+
+func _apply_enemies_disabled_server(disabled: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	enemies_disabled = disabled
+	_sync_enemies_disabled.rpc(disabled)
+	var main := get_tree().current_scene
+	if main and main.has_method("apply_enemies_disabled"):
+		main.apply_enemies_disabled(disabled)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func request_set_enemies_disabled(disabled: bool) -> void:
+	if multiplayer.is_server():
+		_apply_enemies_disabled_server(disabled)
+
+
+@rpc("authority", "call_local", "reliable")
+func _sync_enemies_disabled(disabled: bool) -> void:
+	enemies_disabled = disabled
+	enemies_disabled_changed.emit(disabled)
 
 
 func _push_all() -> void:
