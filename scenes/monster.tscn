@@ -1,25 +1,32 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/monster.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/player/player_rig.gd" id="2"]
 
 [sub_resource type="CapsuleShape3D" id="shape"]
 radius = 0.45
 height = 2.2
 
-[sub_resource type="CapsuleMesh" id="body"]
-radius = 0.45
-height = 2.2
-
-[sub_resource type="StandardMaterial3D" id="body_mat"]
-albedo_color = Color(0.2, 0.05, 0.06, 1)
+[sub_resource type="BoxMesh" id="head_mesh"]
+size = Vector3(0.34, 0.34, 0.34)
 
 [sub_resource type="BoxMesh" id="eyes"]
-size = Vector3(0.5, 0.08, 0.1)
+size = Vector3(0.32, 0.1, 0.1)
 
 [sub_resource type="StandardMaterial3D" id="eyes_mat"]
+albedo_color = Color(1, 0.15, 0.1, 1)
 emission_enabled = true
 emission = Color(1, 0.15, 0.1, 1)
 emission_energy_multiplier = 4.0
+
+[sub_resource type="BoxMesh" id="torso_mesh"]
+size = Vector3(0.48, 0.65, 0.28)
+
+[sub_resource type="BoxMesh" id="arm_mesh"]
+size = Vector3(0.18, 0.6, 0.18)
+
+[sub_resource type="BoxMesh" id="leg_mesh"]
+size = Vector3(0.2, 0.7, 0.2)
 
 [sub_resource type="SceneReplicationConfig" id="replication"]
 properties/0/path = NodePath(".:net_position")
@@ -28,6 +35,15 @@ properties/0/replication_mode = 1
 properties/1/path = NodePath(".:net_yaw")
 properties/1/spawn = true
 properties/1/replication_mode = 1
+properties/2/path = NodePath(".:net_stunned")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+properties/3/path = NodePath(".:net_chasing")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:net_attacking")
+properties/4/spawn = true
+properties/4/replication_mode = 2
 
 [node name="Monster" type="CharacterBody3D"]
 collision_layer = 16
@@ -38,15 +54,40 @@ script = ExtResource("1")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
 shape = SubResource("shape")
 
-[node name="Body" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
-mesh = SubResource("body")
-surface_material_override/0 = SubResource("body_mat")
+[node name="Visuals" type="Node3D" parent="."]
+transform = Transform3D(1.18, 0, 0, 0, 1.18, 0, 0, 0, 1.18, 0, 0, 0)
 
-[node name="Eyes" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, -0.42)
+[node name="Rig" type="Node3D" parent="Visuals"]
+script = ExtResource("2")
+
+[node name="HeadMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.17, 0)
+mesh = SubResource("head_mesh")
+
+[node name="Eyes" type="MeshInstance3D" parent="Visuals/HeadMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -0.15)
 mesh = SubResource("eyes")
 surface_material_override/0 = SubResource("eyes_mat")
+
+[node name="Torso" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.305, 0)
+mesh = SubResource("torso_mesh")
+
+[node name="LeftArm" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.28, 0)
+mesh = SubResource("arm_mesh")
+
+[node name="RightArm" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.28, 0)
+mesh = SubResource("arm_mesh")
+
+[node name="LeftLeg" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.37, 0)
+mesh = SubResource("leg_mesh")
+
+[node name="RightLeg" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.37, 0)
+mesh = SubResource("leg_mesh")
 
 [node name="Agent" type="NavigationAgent3D" parent="."]
 path_desired_distance = 0.8

@@ -59,6 +59,7 @@ var hover_text := ""
 var voice_level := 0.0
 var voice_frames_received := 0
 var third_person := false
+var body_hud_open := false
 
 ## Slot (int) -> resource_path (String) do BodyPartDef instalado, ou "" se removido.
 var body_parts: Dictionary = {}
@@ -253,7 +254,29 @@ func get_hold_target() -> Vector3:
 	return head.global_position + get_aim_direction() * net_hold_distance
 
 
-## Determina qual membro de um jogador foi mirado a partir do ponto de impacto do RayCast.
+## Escolhe o melhor slot para instalar um membro (braço ou perna usa o lado vazio ou o lado orgânico antes de substituir um cibernético).
+func resolve_install_slot(part_def: BodyPartDef) -> BodyPartDef.Slot:
+	if part_def == null:
+		return BodyPartDef.Slot.LEFT_ARM
+	var primary := part_def.slot
+	var paired_idx := BodyPartDef.pair_slot(primary)
+	if paired_idx < 0:
+		return primary
+	var paired := paired_idx as BodyPartDef.Slot
+	if not has_body_part(primary):
+		return primary
+	if not has_body_part(paired):
+		return paired
+	var primary_def := get_body_part_def(primary)
+	var paired_def := get_body_part_def(paired)
+	if part_def.is_cybernetic:
+		if primary_def and not primary_def.is_cybernetic:
+			return primary
+		if paired_def and not paired_def.is_cybernetic:
+			return paired
+	if primary_def and primary_def.resource_path == part_def.resource_path and paired_def and paired_def.resource_path != part_def.resource_path:
+		return paired
+	return primary
 func get_aimed_slot(world_hit_point: Vector3) -> BodyPartDef.Slot:
 	var local_hit := to_local(world_hit_point)
 	var leg_offset := 0.55 if get_leg_count() == 0 else 0.0
@@ -354,21 +377,27 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact"):
 		_handle_interact()
 	elif event.is_action_pressed("slot_1"):
-		loadout.equip(ItemDef.Kind.REVOLVER)
+		loadout.select_slot(0)
 	elif event.is_action_pressed("slot_2"):
-		loadout.equip(ItemDef.Kind.BATON)
+		loadout.select_slot(1)
 	elif event.is_action_pressed("slot_3"):
-		loadout.equip(ItemDef.Kind.GRENADE)
+		loadout.select_slot(2)
+	elif event.is_action_pressed("slot_4"):
+		loadout.select_slot(3)
+	elif event.is_action_pressed("slot_5"):
+		loadout.select_slot(4)
 	elif event.is_action_pressed("reload"):
 		loadout.reload()
 	elif event.is_action_pressed("drop_item"):
 		loadout.drop_equipped()
 	elif event.is_action_pressed("detach_part"):
 		_handle_detach_input()
+	elif event.is_action_pressed("body_hud"):
+		body_hud_open = not body_hud_open
 	elif event.is_action_pressed("toggle_camera"):
 		set_third_person(not third_person)
 	elif event.is_action_pressed("flashlight"):
-		net_flashlight = not net_flashlight
+		loadout.toggle_flashlight()
 	elif event.is_action_pressed("hold_further"):
 		net_hold_distance = minf(net_hold_distance + 0.25, 3.5)
 	elif event.is_action_pressed("hold_nearer"):
@@ -377,12 +406,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _handle_interact() -> void:
 	var target: Variant = ray.get_collider()
-	# 1. Segurando um membro: instala no jogador mirado ou em si mesmo.
+	# 1. Segurando um membro: instala no jogador/inimigo mirado ou em si mesmo.
 	if is_instance_valid(held_prop) and held_prop.def is BodyPartDef:
 		var part_prop := held_prop
 		release_grab(false)
 		if target is Player and target != self:
 			(target as Player).request_attach_part_from_prop.rpc_id(1, part_prop.get_path())
+		elif target is Monster:
+			(target as Monster).request_attach_part_from_prop.rpc_id(1, part_prop.get_path())
 		else:
 			request_attach_part_from_prop.rpc_id(1, part_prop.get_path())
 		return
@@ -397,12 +428,18 @@ func _handle_interact() -> void:
 	if target is Prop and (target as Prop).def is BodyPartDef:
 		request_attach_part_from_prop.rpc_id(1, (target as Prop).get_path())
 		return
-	# 4. Mirando em outro jogador: remove o membro na mira.
+	# 4. Mirando em outro jogador ou inimigo: remove o membro na mira.
 	if target is Player and target != self:
 		var other := target as Player
 		var slot := other.get_removable_slot_at(ray.get_collision_point())
 		if slot >= 0:
 			other.request_detach_part.rpc_id(1, slot)
+		return
+	if target is Monster:
+		var monster := target as Monster
+		var slot := monster.get_removable_slot_at(ray.get_collision_point())
+		if slot >= 0:
+			monster.request_detach_part.rpc_id(1, slot)
 
 
 func _handle_detach_input() -> void:
@@ -412,6 +449,12 @@ func _handle_detach_input() -> void:
 		var slot := other.get_removable_slot_at(ray.get_collision_point())
 		if slot >= 0:
 			other.request_detach_part.rpc_id(1, slot)
+		return
+	if target is Monster:
+		var monster := target as Monster
+		var slot := monster.get_removable_slot_at(ray.get_collision_point())
+		if slot >= 0:
+			monster.request_detach_part.rpc_id(1, slot)
 		return
 	var own_slot := get_next_self_detach_slot()
 	if own_slot >= 0:
@@ -627,19 +670,30 @@ func _update_hover() -> void:
 	if is_instance_valid(held_prop) and held_prop.def is BodyPartDef:
 		var part_def := held_prop.def as BodyPartDef
 		if target is Player and target != self:
-			var other_name: String = Net.roster.get((target as Player).peer_id, {}).get("name", "aliado")
-			hover_text = "[E] Implantar %s em %s" % [part_def.display_name, other_name]
+			var other := target as Player
+			var other_name: String = Net.roster.get(other.peer_id, {}).get("name", "aliado")
+			var target_slot := other.resolve_install_slot(part_def)
+			hover_text = "[E] Implantar %s em %s (%s)" % [part_def.display_name, other_name, BodyPartDef.slot_name(target_slot)]
 			return
-		hover_text = "[E] Implantar %s em si mesmo" % part_def.display_name
+		if target is Monster:
+			var monster := target as Monster
+			var target_slot := monster.resolve_install_slot(part_def)
+			hover_text = "[E] Implantar %s no Inimigo (%s)" % [part_def.display_name, BodyPartDef.slot_name(target_slot)]
+			return
+		var self_slot := resolve_install_slot(part_def)
+		hover_text = "[E] Implantar %s (%s)" % [part_def.display_name, BodyPartDef.slot_name(self_slot)]
 		return
 	if target is Prop:
 		var prop := target as Prop
 		var weapon_in_hand := loadout.equipped != ItemDef.Kind.NONE
 		if prop.def is BodyPartDef:
+			var part_def := prop.def as BodyPartDef
+			var target_slot := resolve_install_slot(part_def)
+			var slot_label := BodyPartDef.slot_name(target_slot)
 			if can_hold_props() and not weapon_in_hand:
-				hover_text = "[Botão esq.] Agarrar  |  [E] Instalar %s  $%d" % [prop.def.display_name, prop.net_value]
+				hover_text = "[Botão esq.] Agarrar  |  [E] Instalar %s (%s)  $%d" % [part_def.display_name, slot_label, prop.net_value]
 			else:
-				hover_text = "[E] Instalar %s  $%d" % [prop.def.display_name, prop.net_value]
+				hover_text = "[E] Instalar %s (%s)  $%d" % [part_def.display_name, slot_label, prop.net_value]
 		elif weapon_in_hand:
 			hover_text = "Guarde a arma para agarrar  %s  $%d" % [prop.def.display_name, prop.net_value]
 		elif can_hold_props():
@@ -660,6 +714,15 @@ func _update_hover() -> void:
 			hover_text = "[E / G] Remover %s de %s" % [part_label, other_name]
 		else:
 			hover_text = "%s não possui membros removíveis" % other_name
+	elif target is Monster:
+		var monster := target as Monster
+		var slot := monster.get_removable_slot_at(ray.get_collision_point())
+		if slot >= 0:
+			var part_def := monster.get_body_part_def(slot as BodyPartDef.Slot)
+			var part_label := part_def.display_name if part_def else BodyPartDef.slot_name(slot as BodyPartDef.Slot)
+			hover_text = "[E / G] Remover %s do Inimigo" % part_label
+		else:
+			hover_text = "Inimigo não possui membros removíveis"
 	else:
 		hover_text = ""
 
@@ -707,26 +770,28 @@ func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF)
 	return spawned
 
 
-## Servidor: instala um BodyPartDef diretamente no slot correspondente (ejetando o anterior se ocupado).
-func server_install_part(def: BodyPartDef, custom_value: int = -1) -> Prop:
+## Servidor: instala um BodyPartDef no slot correspondente (ou no slot pareado se livre/orgânico, ejetando o anterior apenas se ambos ocupados).
+func server_install_part(def: BodyPartDef, custom_value: int = -1, explicit_slot: int = -1) -> Prop:
 	if not multiplayer.is_server() or def == null:
 		return null
+	var target_slot := (explicit_slot as BodyPartDef.Slot) if (explicit_slot >= 0 and explicit_slot < BodyPartDef.ALL_SLOTS.size()) else resolve_install_slot(def)
 	var ejected: Prop = null
-	if has_body_part(def.slot):
-		ejected = server_detach_part(def.slot)
-	body_parts[def.slot] = def.resource_path
-	body_part_values[def.slot] = custom_value if custom_value >= 0 else int((def.min_value + def.max_value) * 0.5)
+	if has_body_part(target_slot):
+		ejected = server_detach_part(target_slot)
+	body_parts[target_slot] = def.resource_path
+	body_part_values[target_slot] = custom_value if custom_value >= 0 else int((def.min_value + def.max_value) * 0.5)
 	_sync_body_parts.rpc(body_parts)
 	return ejected
 
 
 ## Servidor: consome um Prop físico de membro do mundo e o instala neste jogador.
-func server_attach_part_from_prop(prop: Prop) -> bool:
+func server_attach_part_from_prop(prop: Prop, explicit_slot: int = -1) -> bool:
 	if not multiplayer.is_server() or not is_instance_valid(prop):
 		return false
 	var part_def := prop.def as BodyPartDef
 	if part_def == null:
 		return false
+	var target_slot := (explicit_slot as BodyPartDef.Slot) if (explicit_slot >= 0 and explicit_slot < BodyPartDef.ALL_SLOTS.size()) else resolve_install_slot(part_def)
 	var part_value := prop.net_value
 	var drop_origin := prop.global_position + Vector3.UP * 0.25
 	for holder_id: int in prop.holders.keys():
@@ -735,10 +800,10 @@ func server_attach_part_from_prop(prop: Prop) -> bool:
 			holder.grab_lost.rpc_id(holder_id)
 	prop.holders.clear()
 	prop.queue_free()
-	if has_body_part(part_def.slot):
-		server_detach_part(part_def.slot, drop_origin)
-	body_parts[part_def.slot] = part_def.resource_path
-	body_part_values[part_def.slot] = part_value
+	if has_body_part(target_slot):
+		server_detach_part(target_slot, drop_origin)
+	body_parts[target_slot] = part_def.resource_path
+	body_part_values[target_slot] = part_value
 	_sync_body_parts.rpc(body_parts)
 	return true
 

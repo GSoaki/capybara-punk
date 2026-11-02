@@ -59,6 +59,8 @@ func _apply_command_line() -> void:
 		args[parts[0]] = parts[1] if parts.size() > 1 else ""
 	if args.has("name"):
 		Settings.player_name = args.name
+	if args.has("no-enemies") or args.has("disable-enemies"):
+		Game.set_enemies_disabled(true)
 	var port := int(args.get("port", Net.DEFAULT_PORT))
 	if args.has("smoke"):
 		var test: Node = load("res://tests/smoke_test.gd").new()
@@ -176,9 +178,22 @@ func _on_run_started(level_seed: int) -> void:
 	for spot in level.prop_spots:
 		spawn_prop(loot_table[rng.rand_weighted(weights)], spot)
 	_spawn_run_items(rng)
-	for i in monster_count:
-		_next_id += 1
-		$MonsterSpawner.spawn({"name": "Monster%d" % _next_id, "pos": level.monster_spot})
+	if not Game.enemies_disabled:
+		for i in monster_count:
+			_next_id += 1
+			$MonsterSpawner.spawn({"name": "Monster%d" % _next_id, "pos": level.monster_spot})
+
+
+func apply_enemies_disabled(disabled: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	if disabled:
+		for child in monsters.get_children():
+			child.queue_free()
+	elif Game.phase == Game.Phase.RUN and monsters.get_child_count() == 0:
+		for i in monster_count:
+			_next_id += 1
+			$MonsterSpawner.spawn({"name": "Monster%d" % _next_id, "pos": level.monster_spot})
 
 
 func _spawn_run_items(rng: RandomNumberGenerator) -> void:

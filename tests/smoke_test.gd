@@ -85,6 +85,10 @@ func run_host() -> void:
 
 	# Monstro precisa encontrar caminho e andar pelo navmesh.
 	var monster: Monster = main.monsters.get_child(0)
+	check("monstro tem corpo com rig de 6 ossos", monster.rig != null and monster.rig.skeleton.get_bone_count() == 6 and monster.get_leg_count() == 2 and monster.get_arm_count() == 2)
+	var monster_arm := monster.server_detach_part(BodyPartDef.Slot.LEFT_ARM, Vector3(0.0, 1.0, 2.0))
+	check("destacar membro do monstro gera Prop", monster_arm != null and monster_arm.def is BodyPartDef and monster.get_arm_count() == 1)
+	check("reinstalar membro no monstro", monster.server_attach_part_from_prop(monster_arm) and monster.get_arm_count() == 2)
 	var monster_start := monster.global_position
 	me.global_position = Vector3(0.0, 0.1, 3.0)
 	var walked := func() -> bool: return monster.global_position.distance_to(monster_start) > 2.0
@@ -154,6 +158,19 @@ func run_host() -> void:
 	var cyber_arm_prop: Prop = main.spawn_prop(cyber_arm_def, Vector3(0.0, 1.2, 2.0), "TestCyberArm")
 	check("implante cibernético instalado", me.server_attach_part_from_prop(cyber_arm_prop))
 	check("braço cibernético aumenta força para 455", is_equal_approx(me.get_grip_force(), 455.0))
+	var cyber_arm_prop2: Prop = main.spawn_prop(cyber_arm_def, Vector3(0.0, 1.2, 2.0), "TestCyberArm2")
+	check("segundo implante vai para o outro braço sem substituir o primeiro", me.server_attach_part_from_prop(cyber_arm_prop2))
+	check("dois braços cibernéticos somam 560 de força", is_equal_approx(me.get_grip_force(), 560.0))
+	var cyber_leg_def: BodyPartDef = load("res://resources/body_parts/cyber_right_leg.tres")
+	var cyber_leg_prop1: Prop = main.spawn_prop(cyber_leg_def, Vector3(0.0, 1.2, 2.0), "TestCyberLeg1")
+	var cyber_leg_prop2: Prop = main.spawn_prop(cyber_leg_def, Vector3(0.0, 1.2, 2.0), "TestCyberLeg2")
+	check("primeira perna booster instala na perna dir", me.server_attach_part_from_prop(cyber_leg_prop1) and me.get_body_part_def(BodyPartDef.Slot.RIGHT_LEG).is_cybernetic)
+	check("segunda perna booster instala na perna esq ao invés de substituir", me.server_attach_part_from_prop(cyber_leg_prop2) and me.get_body_part_def(BodyPartDef.Slot.LEFT_LEG).is_cybernetic and me.get_body_part_def(BodyPartDef.Slot.RIGHT_LEG).is_cybernetic)
+	me.body_hud_open = true
+	await get_tree().process_frame
+	await get_tree().process_frame
+	check("HUD de membros [I] abre e exibe os 6 slots", main.hud.body_hud_modal.visible and main.hud._body_part_names.size() == 6)
+	me.body_hud_open = false
 	remote.server_detach_part(BodyPartDef.Slot.LEFT_ARM, Vector3(0.5, 1.0, 2.0))
 	remote.server_detach_part(BodyPartDef.Slot.RIGHT_ARM, Vector3(-0.5, 1.0, 2.0))
 	check("sem os dois braços não segura prop", not remote.can_hold_props())
@@ -169,7 +186,12 @@ func run_host() -> void:
 	check("voz recebida", await wait_until(func() -> bool: return remote.voice_frames_received > 0, 5.0))
 	check("voz vira barulho", heard[0] > 0.1)
 	await test_weapons_host(me, remote, monster, crate)
-	main.monsters.get_child(0).set_physics_process(true)
+	Game.set_enemies_disabled(true)
+	await pause(0.1)
+	check("opção desativar inimigos remove monstros", Game.enemies_disabled and main.monsters.get_child_count() == 0)
+	Game.set_enemies_disabled(false)
+	await pause(0.1)
+	check("reativar inimigos recria monstro na run", not Game.enemies_disabled and main.monsters.get_child_count() == 1)
 
 	# Todos mortos encerram a run com falha e voltam ao lobby revividos.
 	remote.server_hit(999, Vector3.ZERO)
@@ -221,6 +243,11 @@ func active_item(kind: ItemDef.Kind) -> WorldItem:
 
 func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop) -> void:
 	var loadout := me.loadout
+	check("hudbar tem 5 slots com lanterna no slot 1", loadout.slot_kinds.size() == 5 and loadout.get_slot_kind(0) == ItemDef.Kind.FLASHLIGHT)
+	var organic_arm: BodyPartDef = load("res://resources/body_parts/organic_left_arm.tres")
+	var cyber_leg: BodyPartDef = load("res://resources/body_parts/cyber_right_leg.tres")
+	check("membro orgânico não cabe no inventário", not loadout.can_take(organic_arm) and not loadout.can_store_object(organic_arm))
+	check("membro mecânico não cabe no inventário", not loadout.can_take(cyber_leg) and not loadout.can_store_object(cyber_leg))
 	check("itens gerados na entrada", main.items.get_child_count() >= main.entry_items.size())
 	for item: WorldItem in main.items.get_children():
 		item.queue_free()
@@ -242,10 +269,10 @@ func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop
 	await pause(0.1)
 	await spawn_and_take(me, "revolver")
 	check("pega revólver", loadout.has_revolver and loadout.loaded == loadout.cylinder_size)
-	check("revólver equipado", loadout.equipped == ItemDef.Kind.REVOLVER)
+	check("revólver equipado no slot 2", loadout.equipped == ItemDef.Kind.REVOLVER and loadout.active_slot == 1)
 	check("item sai do chão", main.items.get_child_count() == 0)
 	await spawn_and_take(me, "ammo")
-	check("munição vai para a reserva", loadout.reserve == 5 and loadout.equipped == ItemDef.Kind.REVOLVER)
+	check("pente de munição ocupa slot e vai para reserva", loadout.get_slot_kind(2) == ItemDef.Kind.AMMO and loadout.reserve == 5 and loadout.equipped == ItemDef.Kind.REVOLVER)
 
 	# Um tiro isolado empurra para trás; olhando para +Z, o recuo é -Z.
 	await place(me, Vector3(0.0, 0.1, 1.0), PI)

@@ -8,6 +8,9 @@ extends Control
 func _ready() -> void:
 	name_edit.text = Settings.player_name
 	address_edit.text = Settings.last_address
+	%DisableEnemies.button_pressed = Game.enemies_disabled
+	%DisableEnemies.toggled.connect(func(on: bool) -> void: Game.set_enemies_disabled(on))
+	Game.enemies_disabled_changed.connect(func(on: bool) -> void: %DisableEnemies.set_pressed_no_signal(on))
 	%HostButton.pressed.connect(_on_host)
 	%JoinButton.pressed.connect(_on_join)
 	multiplayer.connection_failed.connect(_set_buttons.bind(true))
