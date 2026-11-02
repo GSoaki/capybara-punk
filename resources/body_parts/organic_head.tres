@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 0
+is_cybernetic = false
+grip_force = 0.0
+leg_speed_factor = 0.0
+leg_jump_factor = 0.0
+vital = true
+display_name = "Cabeça Orgânica"
+size = Vector3(0.32, 0.32, 0.32)
+color = Color(0.88, 0.72, 0.62, 1)
+mass = 4.5
+min_value = 120
+max_value = 180
+impact_threshold = 5.5
+fragility = 0.15
+spawn_weight = 0.4

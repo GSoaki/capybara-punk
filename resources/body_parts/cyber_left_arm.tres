@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 2
+is_cybernetic = true
+grip_force = 280.0
+leg_speed_factor = 0.0
+leg_jump_factor = 0.0
+vital = false
+display_name = "Braço Hidráulico Esq."
+size = Vector3(0.22, 0.62, 0.22)
+color = Color(0.2, 0.85, 0.92, 1)
+mass = 8.5
+min_value = 160
+max_value = 250
+impact_threshold = 9.0
+fragility = 0.06
+spawn_weight = 0.6

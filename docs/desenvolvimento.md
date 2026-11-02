@@ -21,8 +21,8 @@ godot --path . -- --join=127.0.0.1 --name=Bia
 | Mover, pular, correr, agachar | WASD, Espaço, Shift, Ctrl |
 | Agarrar enquanto segura, arremessar | Botão esquerdo, botão direito |
 | Aproximar ou afastar o objeto | Roda do mouse |
-| Usar alavanca, lanterna | E, F |
-| Apertar para falar (opcional), pausa | V, Esc |
+| Usar alavanca / implantar membro, destacar membro, lanterna | E, G, F |
+| Alternar câmera (1ª / 3ª pessoa), apertar para falar (opcional), pausa | V, T, Esc |
 
 ## O que vem pronto
 

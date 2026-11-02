@@ -4,6 +4,7 @@ extends Control
 @onready var prompt: Label = %Prompt
 @onready var banner: Label = %Banner
 @onready var roster_label: Label = %Roster
+@onready var body_status: Label = %BodyStatus
 @onready var health_bar: ProgressBar = %HealthBar
 @onready var stamina_bar: ProgressBar = %StaminaBar
 @onready var mic_bar: ProgressBar = %MicBar
@@ -29,6 +30,7 @@ func _process(_delta: float) -> void:
 		health_bar.value = me.health
 		stamina_bar.value = me.stamina
 		prompt.text = me.hover_text
+		body_status.text = "%s   [G] Destacar membro   [V] Câmera" % me.get_body_summary()
 
 
 func _objective_text() -> String:

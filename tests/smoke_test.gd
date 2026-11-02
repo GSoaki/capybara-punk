@@ -144,6 +144,23 @@ func run_host() -> void:
 	remote.server_hit(20, Vector3(0.0, 4.0, 6.0))
 	check("cliente derrubado", await wait_until(func() -> bool: return remote.net_knocked, 4.0))
 
+	# Modularidade do corpo: destacar membro gera Prop físico e implantar membro altera atributos.
+	check("força inicial com 2 braços = 350", is_equal_approx(me.get_grip_force(), 350.0))
+	var detached_arm := me.server_detach_part(BodyPartDef.Slot.LEFT_ARM, Vector3(0.0, 1.0, 2.0))
+	check("braço destacado vira Prop", detached_arm != null and detached_arm.def is BodyPartDef)
+	check("sem braço esq reduz força para 175", is_equal_approx(me.get_grip_force(), 175.0))
+	var cyber_arm_def: BodyPartDef = load("res://resources/body_parts/cyber_left_arm.tres")
+	var cyber_arm_prop: Prop = main.spawn_prop(cyber_arm_def, Vector3(0.0, 1.2, 2.0), "TestCyberArm")
+	check("implante cibernético instalado", me.server_attach_part_from_prop(cyber_arm_prop))
+	check("braço cibernético aumenta força para 455", is_equal_approx(me.get_grip_force(), 455.0))
+	remote.server_detach_part(BodyPartDef.Slot.LEFT_ARM, Vector3(0.5, 1.0, 2.0))
+	remote.server_detach_part(BodyPartDef.Slot.RIGHT_ARM, Vector3(-0.5, 1.0, 2.0))
+	check("sem os dois braços não segura prop", not remote.can_hold_props())
+	me.set_third_person(true)
+	check("camera 3a pessoa ativa visuals e recuo", me.third_person and me.visuals.visible and me.camera.position.z > 0.2)
+	me.set_third_person(false)
+	check("camera 1a pessoa restaura visao", not me.third_person and not me.visuals.visible and is_zero_approx(me.camera.position.z))
+
 	# Voz: frame do cliente chega ao host e gera barulho que o monstro escuta.
 	var heard := [0.0]
 	Game.noise_emitted.connect(func(_o: Vector3, l: float) -> void: heard[0] = maxf(heard[0], l))
@@ -157,7 +174,7 @@ func run_host() -> void:
 	remote.server_hit(999, Vector3.ZERO)
 	check("run encerra sem sobreviventes", Game.phase == Game.Phase.RESULTS)
 	check("voltou ao lobby", await wait_until(func() -> bool: return Game.phase == Game.Phase.LOBBY, 10.0))
-	check("todos revividos", me.alive and remote.alive and remote.health == 100)
+	check("todos revividos", me.alive and remote.alive and remote.health == 100 and remote.can_hold_props())
 	check("props limpos", main.props.get_child_count() == 0)
 	check("monstros limpos", main.monsters.get_child_count() == 0)
 

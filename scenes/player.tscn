@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/net/voice_output.gd" id="2"]
@@ -7,17 +7,25 @@
 radius = 0.35
 height = 1.8
 
-[sub_resource type="CapsuleMesh" id="body"]
-radius = 0.35
-height = 1.8
+[sub_resource type="BoxMesh" id="head_mesh"]
+size = Vector3(0.34, 0.34, 0.34)
 
 [sub_resource type="BoxMesh" id="visor"]
-size = Vector3(0.5, 0.18, 0.2)
+size = Vector3(0.3, 0.12, 0.1)
 
 [sub_resource type="StandardMaterial3D" id="visor_mat"]
 albedo_color = Color(0.1, 0.12, 0.16, 1)
 metallic = 0.8
 roughness = 0.2
+
+[sub_resource type="BoxMesh" id="torso_mesh"]
+size = Vector3(0.48, 0.65, 0.28)
+
+[sub_resource type="BoxMesh" id="arm_mesh"]
+size = Vector3(0.18, 0.6, 0.18)
+
+[sub_resource type="BoxMesh" id="leg_mesh"]
+size = Vector3(0.2, 0.7, 0.2)
 
 [sub_resource type="SceneReplicationConfig" id="replication"]
 properties/0/path = NodePath(".:net_position")
@@ -56,14 +64,34 @@ shape = SubResource("shape")
 
 [node name="Visuals" type="Node3D" parent="."]
 
-[node name="Body" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
-mesh = SubResource("body")
+[node name="HeadMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.54, 0)
+mesh = SubResource("head_mesh")
 
-[node name="Visor" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -0.27)
+[node name="Visor" type="MeshInstance3D" parent="Visuals/HeadMesh"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -0.14)
 mesh = SubResource("visor")
 surface_material_override/0 = SubResource("visor_mat")
+
+[node name="Torso" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.025, 0)
+mesh = SubResource("torso_mesh")
+
+[node name="LeftArm" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, 1.02, 0)
+mesh = SubResource("arm_mesh")
+
+[node name="RightArm" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 1.02, 0)
+mesh = SubResource("arm_mesh")
+
+[node name="LeftLeg" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.14, 0.35, 0)
+mesh = SubResource("leg_mesh")
+
+[node name="RightLeg" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.14, 0.35, 0)
+mesh = SubResource("leg_mesh")
 
 [node name="Head" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
@@ -80,7 +108,7 @@ visible = false
 
 [node name="InteractRay" type="RayCast3D" parent="Head"]
 target_position = Vector3(0, 0, -3.5)
-collision_mask = 13
+collision_mask = 15
 collide_with_areas = false
 
 [node name="NameLabel" type="Label3D" parent="."]

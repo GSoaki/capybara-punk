@@ -66,9 +66,9 @@ func spawn_point(index: int) -> Vector3:
 	return spawn_points.get_child(index % spawn_points.get_child_count()).global_position
 
 
-func spawn_prop(def: PropDef, at: Vector3, node_name: String = "") -> Prop:
+func spawn_prop(def: PropDef, at: Vector3, node_name: String = "", custom_value: int = -1) -> Prop:
 	_next_id += 1
-	var value := randi_range(def.min_value, def.max_value)
+	var value := custom_value if custom_value >= 0 else randi_range(def.min_value, def.max_value)
 	return $PropSpawner.spawn({
 		"def": def.resource_path,
 		"name": node_name if not node_name.is_empty() else "Prop%d" % _next_id,
