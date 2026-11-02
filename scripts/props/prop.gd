@@ -74,8 +74,10 @@ func _apply_holders() -> void:
 	angular_damp = 6.0 if not holders.is_empty() else 0.5
 	for peer_id: int in holders.keys():
 		var player := holders[peer_id] as Player
-		if not is_instance_valid(player) or not player.alive:
+		if not is_instance_valid(player) or not player.alive or not player.can_hold_props():
 			holders.erase(peer_id)
+			if is_instance_valid(player):
+				player.grab_lost.rpc_id(peer_id)
 			continue
 		var target := player.get_hold_target()
 		if global_position.distance_to(target) > BREAK_RANGE:
@@ -84,7 +86,7 @@ func _apply_holders() -> void:
 			continue
 		var acceleration := (target - global_position) * SPRING - linear_velocity * DAMPING
 		acceleration.y += get_gravity().length()
-		apply_central_force((acceleration * mass).limit_length(GRIP_FORCE))
+		apply_central_force((acceleration * mass).limit_length(player.get_grip_force()))
 
 
 func _on_body_entered(_body: Node) -> void:
@@ -107,7 +109,7 @@ func request_grab() -> void:
 		return
 	var id := Net.sender_id()
 	var player := Game.players.get(id) as Player
-	if player and player.alive and player.global_position.distance_to(global_position) <= GRAB_RANGE:
+	if player and player.alive and player.can_hold_props() and player.global_position.distance_to(global_position) <= GRAB_RANGE:
 		holders[id] = player
 		sleeping = false
 
@@ -119,8 +121,9 @@ func request_release(throw: bool) -> void:
 	var id := Net.sender_id()
 	var player := holders.get(id) as Player
 	holders.erase(id)
-	if throw and is_instance_valid(player):
-		apply_central_impulse(player.get_aim_direction() * THROW_IMPULSE * minf(mass, 15.0))
+	if throw and is_instance_valid(player) and player.can_hold_props():
+		var throw_scale := clampf(player.get_grip_force() / GRIP_FORCE, 0.35, 2.0)
+		apply_central_impulse(player.get_aim_direction() * THROW_IMPULSE * throw_scale * minf(mass, 15.0))
 
 
 @rpc("any_peer", "call_local", "unreliable")

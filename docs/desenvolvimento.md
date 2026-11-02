@@ -2,7 +2,7 @@
 
 Template de co-op 3D em primeira pessoa para Godot 4.7.2, sem assets externos e sem dependências nativas. A geometria é greybox e o projeto é GDScript puro. O loop é o do gênero: até 8 amigos entram numa instalação gerada por seed, carregam loot com física até o van, fogem de um monstro que escuta a voz deles e tentam bater uma quota crescente.
 
-⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 107 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
+⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 119 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
 
 ## Como rodar
 
@@ -23,10 +23,10 @@ godot --path . -- --join=127.0.0.1 --name=Bia
 | Usar a arma, arremessar cacetete ou granada | Botão esquerdo, botão direito |
 | Pegar item do chão | E |
 | Equipar ou guardar revólver, cacetete, granada | 1, 2, 3 |
-| Recarregar, largar a arma | R, G |
+| Recarregar, largar a arma | R, Q |
 | Aproximar ou afastar o objeto | Roda do mouse |
-| Usar alavanca, lanterna | E, F |
-| Apertar para falar (opcional), pausa | V, Esc |
+| Usar alavanca / implantar membro, destacar membro, lanterna | E, G, F |
+| Alternar câmera (1ª / 3ª pessoa), apertar para falar (opcional), pausa | V, T, Esc |
 
 ## O que vem pronto
 
@@ -40,7 +40,7 @@ godot --path . -- --join=127.0.0.1 --name=Bia
 
 **Carga cooperativa:** cada jogador aplica no máximo 350 N, então objetos acima de cerca de 35 kg só saem do chão com duas pessoas. O rack de servidor (55 kg) existe para isso.
 
-**Armas e itens:** revólver, cacetete, granada de repulsão e caixas de munição ficam no chão. Toda run coloca um de cada na primeira sala e sorteia mais itens nas outras. As armas ferem aliados. Ao morrer, o jogador solta tudo o que carrega, e o inventário é zerado no fim da run.
+**Armas e itens:** revólver, cacetete, granada de repulsão e caixas de munição ficam no chão. Toda run coloca um de cada na primeira sala e sorteia mais itens nas outras. As armas ferem aliados e exigem ao menos um braço. Ao morrer, o jogador solta tudo o que carrega, e o inventário é zerado no fim da run.
 
 | Arma | Efeito | Principais valores |
 | --- | --- | --- |

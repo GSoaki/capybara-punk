@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 4
+is_cybernetic = false
+grip_force = 0.0
+leg_speed_factor = 0.5
+leg_jump_factor = 0.5
+vital = false
+display_name = "Perna Esq. Orgânica"
+size = Vector3(0.2, 0.68, 0.2)
+color = Color(0.82, 0.65, 0.56, 1)
+mass = 6.0
+min_value = 75
+max_value = 120
+impact_threshold = 7.0
+fragility = 0.1
+spawn_weight = 0.8

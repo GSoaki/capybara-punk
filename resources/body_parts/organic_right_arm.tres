@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 3
+is_cybernetic = false
+grip_force = 175.0
+leg_speed_factor = 0.0
+leg_jump_factor = 0.0
+vital = false
+display_name = "Braço Dir. Orgânico"
+size = Vector3(0.18, 0.58, 0.18)
+color = Color(0.88, 0.72, 0.62, 1)
+mass = 3.5
+min_value = 60
+max_value = 100
+impact_threshold = 6.5
+fragility = 0.12
+spawn_weight = 0.8

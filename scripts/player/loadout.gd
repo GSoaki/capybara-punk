@@ -105,6 +105,10 @@ static func def_of(kind: ItemDef.Kind) -> ItemDef:
 	return null
 
 
+func _ready() -> void:
+	player.body_parts_changed.connect(_reconcile_equipped)
+
+
 func _process(delta: float) -> void:
 	if net_equipped != _shown:
 		_shown = net_equipped
@@ -167,7 +171,7 @@ func _mark(kind: ItemDef.Kind) -> String:
 
 
 func equip(kind: ItemDef.Kind) -> void:
-	equipped = ItemDef.Kind.NONE if kind == equipped or not owns(kind) else kind
+	equipped = ItemDef.Kind.NONE if kind == equipped or not owns(kind) or not player.can_hold_props() else kind
 	net_equipped = equipped
 	if equipped != ItemDef.Kind.NONE:
 		player.release_grab(false)
@@ -293,7 +297,7 @@ func _predict_loss(kind: ItemDef.Kind) -> void:
 
 
 func _reconcile_equipped() -> void:
-	if equipped != ItemDef.Kind.NONE and not owns(equipped):
+	if equipped != ItemDef.Kind.NONE and (not owns(equipped) or not player.can_hold_props()):
 		equipped = ItemDef.Kind.NONE
 		net_equipped = equipped
 
@@ -364,6 +368,11 @@ func _is_valid_request() -> bool:
 	return multiplayer.is_server() and Net.sender_id() == player.peer_id and player.alive
 
 
+## Usar uma arma exige ao menos um braço; pegar e largar, não.
+func _is_valid_use() -> bool:
+	return _is_valid_request() and player.can_hold_props()
+
+
 ## Ponto à frente da mão, recuado se houver parede, para o item não nascer do outro lado dela.
 func _hand_point(direction: Vector3, reach: float) -> Vector3:
 	var from := _head.global_position
@@ -397,7 +406,7 @@ func _request_take(item_name: String) -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _request_fire(direction: Vector3) -> void:
 	var now := Time.get_ticks_msec()
-	if not _is_valid_request() or not has_revolver or reloading or loaded <= 0:
+	if not _is_valid_use() or not has_revolver or reloading or loaded <= 0:
 		return
 	if now < _server_next_shot_ms or not direction.is_finite() or direction.is_zero_approx():
 		return
@@ -429,7 +438,7 @@ func _request_reload() -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _request_melee(direction: Vector3) -> void:
 	var now := Time.get_ticks_msec()
-	if not _is_valid_request() or not has_baton or now < _server_next_melee_ms:
+	if not _is_valid_use() or not has_baton or now < _server_next_melee_ms:
 		return
 	if not direction.is_finite() or direction.is_zero_approx():
 		return
@@ -461,7 +470,7 @@ func _request_melee(direction: Vector3) -> void:
 
 @rpc("any_peer", "call_local", "reliable")
 func _request_throw(kind: int, direction: Vector3) -> void:
-	if not _is_valid_request() or not direction.is_finite() or direction.is_zero_approx():
+	if not _is_valid_use() or not direction.is_finite() or direction.is_zero_approx():
 		return
 	var aim := direction.normalized()
 	var main := get_tree().current_scene as Main

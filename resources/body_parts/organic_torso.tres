@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 1
+is_cybernetic = false
+grip_force = 0.0
+leg_speed_factor = 0.0
+leg_jump_factor = 0.0
+vital = true
+display_name = "Tronco Orgânico"
+size = Vector3(0.46, 0.62, 0.28)
+color = Color(0.82, 0.65, 0.56, 1)
+mass = 18.0
+min_value = 180
+max_value = 260
+impact_threshold = 7.5
+fragility = 0.1
+spawn_weight = 0.3
