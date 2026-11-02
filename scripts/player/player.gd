@@ -23,6 +23,7 @@ const PlayerRigScript := preload("res://scripts/player/player_rig.gd")
 const MOUSE_SETTLE_SECONDS := 0.1
 ## Abaixo disto, um golpe só desequilibra, sem derrubar o corpo em ragdoll.
 const RAGDOLL_MIN_STUN := 0.5
+const CARRY_NOTICE_SECONDS := 2.0
 
 const DEFAULT_BODY_PARTS: Dictionary = {
 	BodyPartDef.Slot.HEAD: "res://resources/body_parts/organic_head.tres",
@@ -56,6 +57,8 @@ var alive := true
 var stamina := 100.0
 var held_prop: Prop
 var hover_text := ""
+## Aviso curto para o HUD quando o objeto escapa da mão.
+var carry_notice := ""
 var voice_level := 0.0
 var voice_frames_received := 0
 var third_person := false
@@ -78,6 +81,7 @@ var net_holding := false
 
 var _knock_timer := 0.0
 var _stagger_timer := 0.0
+var _carry_notice_timer := 0.0
 var _last_knock_impulse := Vector3.ZERO
 var _exhausted := false
 var _spawn_position := Vector3.ZERO
@@ -475,6 +479,9 @@ func _update_camera_view(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_carry_notice_timer -= delta
+	if _carry_notice_timer <= 0.0:
+		carry_notice = ""
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_mouse_settle = maxf(_mouse_settle - delta, 0.0)
 	else:
@@ -635,15 +642,18 @@ func _update_hover() -> void:
 	if target is Prop:
 		var prop := target as Prop
 		var weapon_in_hand := loadout.equipped != ItemDef.Kind.NONE
-		if prop.def is BodyPartDef:
+		var grab_verb := "Ajudar a carregar" if not prop.net_holder_ids.is_empty() else "Agarrar"
+		if prop == held_prop:
+			hover_text = "Solte o botão para largar  |  [Botão dir.] Arremessar  %s  $%d" % [prop.def.display_name, prop.net_value]
+		elif prop.def is BodyPartDef:
 			if can_hold_props() and not weapon_in_hand:
-				hover_text = "[Botão esq.] Agarrar  |  [E] Instalar %s  $%d" % [prop.def.display_name, prop.net_value]
+				hover_text = "[Botão esq.] %s  |  [E] Instalar %s  $%d" % [grab_verb, prop.def.display_name, prop.net_value]
 			else:
 				hover_text = "[E] Instalar %s  $%d" % [prop.def.display_name, prop.net_value]
 		elif weapon_in_hand:
-			hover_text = "Guarde a arma para agarrar  %s  $%d" % [prop.def.display_name, prop.net_value]
+			hover_text = "Guarde a arma para %s  %s  $%d" % [grab_verb.to_lower(), prop.def.display_name, prop.net_value]
 		elif can_hold_props():
-			hover_text = "[Botão esq.] Agarrar  %s  $%d" % [prop.def.display_name, prop.net_value]
+			hover_text = "[Botão esq.] %s  %s  $%d" % [grab_verb, prop.def.display_name, prop.net_value]
 		else:
 			hover_text = "Sem braços para agarrar  %s  $%d" % [prop.def.display_name, prop.net_value]
 	elif target is WorldItem and target.can_take():
@@ -864,8 +874,12 @@ func _revive(spawn_position: Vector3) -> void:
 ## Usada pelo servidor para avisar que o objeto escapou da mão do jogador.
 @rpc("any_peer", "call_local", "reliable")
 func grab_lost() -> void:
-	if Net.sender_id() == 1:
-		held_prop = null
+	if Net.sender_id() != 1:
+		return
+	if is_instance_valid(held_prop):
+		carry_notice = "Você perdeu o agarre em %s" % held_prop.def.display_name
+		_carry_notice_timer = CARRY_NOTICE_SECONDS
+	held_prop = null
 
 
 @rpc("any_peer", "call_local", "reliable")

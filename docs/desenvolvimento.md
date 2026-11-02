@@ -2,7 +2,7 @@
 
 Template de co-op 3D em primeira pessoa para Godot 4.7.2, sem assets externos e sem dependências nativas. A geometria é greybox e o projeto é GDScript puro. O loop é o do gênero: até 8 amigos entram numa instalação gerada por seed, carregam loot com física até o van, fogem de um monstro que escuta a voz deles e tentam bater uma quota crescente.
 
-⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 119 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
+⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 153 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
 
 ## Como rodar
 
@@ -38,21 +38,23 @@ godot --path . -- --join=127.0.0.1 --name=Bia
 
 **Loot físico:** cada tipo é um `PropDef` (`.tres`) com massa, valor e fragilidade. Impactos reduzem o valor e podem destruir o objeto.
 
-**Carga cooperativa:** cada jogador aplica no máximo 350 N, então objetos acima de cerca de 35 kg só saem do chão com duas pessoas. O rack de servidor (55 kg) existe para isso.
+**Carga cooperativa:** cada jogador aplica no máximo 350 N, então objetos acima de cerca de 35 kg só saem do chão com duas pessoas. O rack de servidor (55 kg) existe para isso. Um painel abaixo da mira mostra se o agarre foi aceito, se o jogador está ajudando alguém ou recebendo ajuda, quantos faltam e quantos dos jogadores vivos estão segurando.
 
-**Armas e itens:** revólver, cacetete, granada de repulsão e caixas de munição ficam no chão. Toda run coloca um de cada na primeira sala e sorteia mais itens nas outras. As armas ferem aliados e exigem ao menos um braço. Ao morrer, o jogador solta tudo o que carrega, e o inventário é zerado no fim da run.
+**Armas e itens:** revólver, cacetete, granada de impacto e caixas de munição ficam no chão. Um de cada fica no van ao abrir a sessão e volta a cada fim de run (`lobby_items` no nó `Main`). Durante a run, mais itens são sorteados nas salas (`item_table`). As armas ferem aliados e exigem ao menos um braço. Ao morrer, o jogador solta tudo o que carrega, e o inventário é zerado no fim da run.
 
 | Arma | Efeito | Principais valores |
 | --- | --- | --- |
 | Revólver | Cada tiro empurra o jogador para trás e levanta a mira. Tiros com menos de 0,45 s entre si acumulam força e abrem a dispersão. O 3.º tiro seguido tira os pés do chão, o 4.º derruba e o 5.º faz a arma escapar da mão. | 5 balas, 12 de dano, 2,5 m/s no primeiro tiro e cerca de 14 m/s de pico na rajada |
 | Cacetete | Corpo a corpo fere e empurra. Arremessado com o botão direito, puxa o jogador para a frente, gira a mira e quica com rebote de 0,85. Depois de 0,3 s, também machuca quem o jogou. | 15 de dano de perto; no voo, 0,9 de dano por m/s |
-| Granada de repulsão | Explode 2,5 s depois do arremesso e lança jogadores, monstros, loot e itens sem parede no caminho. Não fere diretamente, mas o loot perde valor no impacto. | Raio de 7 m, até 14 m/s |
+| Granada de impacto | Arremessada, explode no primeiro contato com parede, chão, jogador, monstro, drone ou loot e lança jogadores, monstros, loot e itens sem parede no caminho. Não fere diretamente, mas o loot perde valor no impacto. Largada com Q, não detona. | Raio de 7 m, até 14 m/s |
 
 Bater numa parede a mais de 11 m/s depois de ser lançado causa o mesmo dano de uma queda nessa velocidade. Os valores ficam nos `@export` de `scripts/player/loadout.gd`, editáveis no nó `Loadout` de `player.tscn`, e nas constantes de `scripts/items/world_item.gd`.
 
 **Fase gerada:** labirinto de salas construído da mesma seed em todos os peers, com navmesh assado em runtime no servidor.
 
 **Monstro:** patrulha, investiga barulho e persegue quem enxerga. Voz, corrida e impactos geram barulho.
+
+**Drone de segurança:** cada run gera 2 drones, cada um com um circuito fixo de 4 salas, voado a 2 m do chão com parada de 1 s em cada ponto. Eles não enxergam, não escutam, não atacam e nunca alteram o circuito. Têm 40 de vida; armas os ferem e a granada os empurra, depois do que retomam a rota.
 
 **Loop de partida:** lobby, run de 5 minutos, resultado e volta ao lobby. Bater a quota avança o dia e multiplica a quota por 1,35; falhar volta ao dia 1.
 
@@ -64,7 +66,7 @@ scripts/net/        VoiceCodec (mu-law), VoiceOutput (buffer de jitter e playbac
 scripts/player/     Player, Loadout (inventário e armas)
 scripts/props/      Prop, PropDef
 scripts/items/      ItemDef, WorldItem (item no chão, cacetete em voo, granada), WeaponFx
-scripts/world/      LevelGenerator, Monster, Lever, ExtractionZone
+scripts/world/      LevelGenerator, Monster, Drone, Lever, ExtractionZone
 scripts/main.gd     Spawners e reação às fases
 tests/              Teste de integração com dois processos
 ```

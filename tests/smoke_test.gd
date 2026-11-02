@@ -74,14 +74,24 @@ func run_host() -> void:
 	var reached := func() -> bool: return remote.global_position.distance_to(Vector3(2.0, 0.0, 0.0)) < 0.5
 	check("posição do cliente replicada", await wait_until(reached))
 
+	# Itens do lobby: já estão no van, podem ser pegos e continuam com o jogador na run.
+	check("itens no lobby", main.items.get_child_count() == main.lobby_items.size())
+	var lobby_baton: WorldItem = main.items.get_children().filter(func(i: WorldItem) -> bool: return i.def.kind == ItemDef.Kind.BATON)[0]
+	me.loadout.try_take(lobby_baton)
+	await pause(0.1)
+	check("pega item no lobby", me.loadout.has_baton)
+
 	$"../Van/Lever".request_use()
 	check("fase RUN", Game.phase == Game.Phase.RUN)
+	check("item do lobby segue na run", me.loadout.has_baton)
+	me.loadout.server_reset()
 	await main.level.navigation_ready
 	await get_tree().physics_frame
 	print("LAYOUT=", main.level.layout_signature)
 	check("navmesh com poligonos", main.level.navigation_mesh.get_polygon_count() > 0)
 	check("props gerados", main.props.get_child_count() > 0)
 	check("monstro gerado", main.monsters.get_child_count() == 1)
+	check("drones gerados", main.drones.get_child_count() == main.drone_count)
 
 	# Monstro precisa encontrar caminho e andar pelo navmesh.
 	var monster: Monster = main.monsters.get_child(0)
@@ -112,15 +122,41 @@ func run_host() -> void:
 	me.head.rotation.x = 0.6
 	await pause(0.2)
 	var rack_y := rack.global_position.y
+	# Só de mirar, o painel já avisa que o objeto exige mais gente.
+	var to_rack := rack.global_position - me.head.global_position
+	me.rotation.y = atan2(-to_rack.x, -to_rack.z)
+	me.head.rotation.x = atan2(to_rack.y, Vector2(to_rack.x, to_rack.z).length())
+	var warned := func() -> bool: return main.hud.carry_panel.visible and "precisa de 2 jogadores" in main.hud.carry_status_label.text
+	check("HUD: mirar avisa quantos são necessários", await wait_until(warned, 1.0))
+	me.rotation.y = 0.0
+	me.head.rotation.x = 0.6
+	await pause(0.2)
 	me.try_grab(rack)
 	await pause(1.5)
 	check("uma pessoa não ergue rack (dy=%.2f)" % (rack.global_position.y - rack_y), rack.global_position.y < rack_y + 0.3)
+	var hud: Control = main.hud
+	check("HUD: confirma que segura sozinho", "sozinho" in hud.carry_status(me, rack).text and "falta 1" in hud.carry_status(me, rack).text)
+	check("HUD: conta relativa aos jogadores", hud.carry_count_text(rack) == "1 de 2 jogadores segurando")
+	check("HUD: painel visível ao segurar", hud.carry_panel.visible and hud.carry_pips.get_child_count() == 2)
 	_ready_for_client.rpc("grab_rack")
 	check("cliente segura rack", await wait_until(func() -> bool: return rack.holders.has(client_id)))
 	check("duas pessoas erguem rack", await wait_until(func() -> bool: return rack.global_position.y > rack_y + 0.4, 5.0))
+	var helped := func() -> bool: return rack.net_holder_ids.size() == 2 and "client está ajudando você" in hud.carry_status(me, rack).text
+	check("HUD: mostra que o aliado está ajudando", await wait_until(helped, 2.0))
+	check("HUD: conta sobe com a ajuda", hud.carry_count_text(rack) == "2 de 2 jogadores segurando")
+	check("HUD: força suficiente fica verde", rack.people_missing() == 0 and hud.carry_status(me, rack).color == hud.CARRY_OK)
 	me.release_grab(false)
 	_ready_for_client.rpc("release_rack")
 	await wait_until(func() -> bool: return rack.holders.is_empty())
+
+	# Agarre recusado pelo servidor não pode deixar o jogador achando que está segurando.
+	var hold_spot := me.global_position
+	me.global_position = Vector3(0.0, 0.1, -40.0)
+	await pause(0.1)
+	me.try_grab(crate)
+	check("agarre longe é recusado e avisado", me.held_prop == null and "perdeu o agarre" in me.carry_notice)
+	me.global_position = hold_spot
+	await pause(0.1)
 
 	# Extração: objeto dentro da zona conta para a quota e o cliente recebe o total.
 	crate.global_position = Vector3(-1.5, 0.5, -1.5)
@@ -168,6 +204,7 @@ func run_host() -> void:
 	_ready_for_client.rpc("send_voice")
 	check("voz recebida", await wait_until(func() -> bool: return remote.voice_frames_received > 0, 5.0))
 	check("voz vira barulho", heard[0] > 0.1)
+	await test_drones_host(me)
 	await test_weapons_host(me, remote, monster, crate)
 	main.monsters.get_child(0).set_physics_process(true)
 
@@ -179,7 +216,8 @@ func run_host() -> void:
 	check("todos revividos", me.alive and remote.alive and remote.health == 100 and remote.can_hold_props())
 	check("props limpos", main.props.get_child_count() == 0)
 	check("monstros limpos", main.monsters.get_child_count() == 0)
-	check("itens limpos", main.items.get_child_count() == 0)
+	check("drones limpos", main.drones.get_child_count() == 0)
+	check("itens voltam ao lobby", await wait_until(func() -> bool: return main.items.get_child_count() == main.lobby_items.size()))
 	check("inventário zerado ao voltar", not me.loadout.has_revolver and remote.loadout.reserve == 0)
 
 	_ready_for_client.rpc("leave")
@@ -219,9 +257,59 @@ func active_item(kind: ItemDef.Kind) -> WorldItem:
 	return null
 
 
+func test_drones_host(me: Player) -> void:
+	var drone: Drone = main.drones.get_child(0)
+	var other: Drone = main.drones.get_child(1)
+	var start := drone.global_position
+	check("drone voa na altitude", absf(drone.global_position.y - drone.hover_height) < 0.3)
+	check("drone patrulha", await wait_until(func() -> bool: return drone.global_position.distance_to(start) > 2.0, 15.0))
+
+	# Jogador colado e barulho alto não mudam a rota nem causam dano.
+	var route := drone._waypoints
+	var goal_before := drone.waypoint_index
+	var health_before := me.health
+	var noise_at := drone.global_position
+	var near := Vector3(noise_at.x + 1.0, 0.1, noise_at.z)
+	var chased := false
+	for i in 60:
+		me.global_position = near
+		Game.emit_noise(noise_at, 1.0)
+		await get_tree().physics_frame
+		# A meta só pode ser a atual ou a próxima do circuito.
+		var goal_now := drone.waypoint_index
+		chased = chased or (goal_now != goal_before and goal_now != (goal_before + 1) % route.size())
+	check("drone ignora jogador e barulho", drone._waypoints == route and not chased)
+	check("drone não ataca", me.health == health_before)
+
+	# O circuito fecha: passa por todos os pontos e volta ao primeiro.
+	drone.patrol_speed = 40.0
+	drone.waypoint_pause = 0.0
+	var visited := {}
+	var completed := func() -> bool:
+		visited[drone.waypoint_index] = true
+		return visited.size() == route.size() and drone.waypoint_index == goal_before
+	check("circuito fecha", await wait_until(completed, 40.0))
+	drone.patrol_speed = 2.5
+
+	# Empurrado para fora da rota, retoma a patrulha.
+	drone.server_hit(5, Vector3.RIGHT * 4.0, 0.3)
+	check("drone sofre dano", drone.health == drone.max_health - 5)
+	await pause(0.5)
+	var after_stun := drone.global_position
+	check("retoma após ser atingido", await wait_until(func() -> bool: return drone.global_position.distance_to(after_stun) > 1.0, 10.0))
+
+	other.server_hit(999, Vector3.ZERO)
+	await pause(0.1)
+	check("drone pode ser destruído", main.drones.get_child_count() == main.drone_count - 1)
+
+	# Sai do caminho do resto do teste, que acontece no van.
+	drone.set_physics_process(false)
+	drone.global_position = Vector3(0.0, 2.0, -60.0)
+
+
 func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop) -> void:
 	var loadout := me.loadout
-	check("itens gerados na entrada", main.items.get_child_count() >= main.entry_items.size())
+	check("itens do lobby seguem no van", main.items.get_children().any(func(i: WorldItem) -> bool: return i.global_position.z > 0.0))
 	for item: WorldItem in main.items.get_children():
 		item.queue_free()
 	# Os membros soltos pelo teste do corpo modular bloqueariam a mira e os arremessos.
@@ -343,12 +431,22 @@ func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop
 	await place(me, Vector3(0.0, 0.1, 2.0))
 	await spawn_and_take(me, "grenade")
 	check("granada equipada", loadout.equipped == ItemDef.Kind.GRENADE)
+	# Largada, é um item comum: cai no chão, não detona e pode ser pega de novo.
+	loadout.drop_equipped()
+	await pause(1.0)
+	var dropped: WorldItem = main.items.get_children().filter(func(i: WorldItem) -> bool: return i.def.kind == ItemDef.Kind.GRENADE)[0]
+	check("granada largada não detona", is_instance_valid(dropped) and dropped.can_take())
+	loadout.try_take(dropped)
+	await pause(0.2)
+	check("granada largada volta à mão", loadout.grenades == 1 and loadout.equipped == ItemDef.Kind.GRENADE)
+	await place(me, Vector3(0.0, 0.1, 2.0))
 	loadout.use_primary()
 	check("granada sai da mão", loadout.grenades == 0 and loadout.equipped == ItemDef.Kind.NONE)
 	var thrown := active_item(ItemDef.Kind.GRENADE)
-	check("pino puxado", thrown != null and not thrown.can_take())
-	thrown.queue_free()
-	await pause(0.1)
+	check("granada arremessada fica ativa", thrown != null and not thrown.can_take())
+	var thrown_path := NodePath(String(thrown.name))
+	check("granada explode no impacto", await wait_until(func() -> bool: return not main.items.has_node(thrown_path), 2.0))
+	await pause(1.6)
 
 	var blast_center := Vector3(0.0, 0.5, 0.0)
 	monster.set_physics_process(true)
@@ -363,8 +461,11 @@ func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop
 	await pause(0.3)
 	var floor_item := main.spawn_item(def_item("ammo"), Vector3(0.0, 0.3, -1.0))
 	await pause(0.1)
-	var armed := main.spawn_item(def_item("grenade"), blast_center, Vector3.ZERO, true, 1, 0)
-	armed.set("_timer", 0.05)
+	var drone: Drone = main.drones.get_child(0)
+	drone.global_position = Vector3(1.5, 2.0, 0.5)
+	drone.set_physics_process(true)
+	var drone_start := drone.global_position
+	var armed := main.spawn_item(def_item("grenade"), blast_center, Vector3.DOWN * 6.0, true, 1, 0)
 	var monster_x := monster.global_position.x
 	var crate_z := crate.global_position.z
 	var floor_item_z := floor_item.global_position.z
@@ -378,6 +479,9 @@ func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop
 	check("empurra cliente (x=%.1f)" % remote.net_position.x, await wait_until(func() -> bool: return remote.net_position.x < remote_x - 1.0, 2.0))
 	check("empurra loot (z=%.1f)" % crate.global_position.z, crate.global_position.z > crate_z + 0.5)
 	check("empurra item", floor_item.global_position.z < floor_item_z - 0.5)
+	check("empurra drone", drone.global_position.distance_to(drone_start) > 1.0)
+	drone.set_physics_process(false)
+	drone.global_position = Vector3(0.0, 2.0, -60.0)
 	check("granada não fere direto", monster.health == healths[2])
 	check("derruba quem é repelido", me.net_knocked)
 	monster.global_position = Vector3(0.0, 0.0, -60.0)
@@ -463,24 +567,40 @@ func run_client() -> void:
 	check("player local existe", me != null and me.is_local())
 	me.global_position = Vector3(2.0, 0.1, 0.0)
 
+	check("cliente vê itens no lobby", await wait_until(func() -> bool: return main.items.get_child_count() >= main.lobby_items.size() - 1))
 	check("recebe run", await wait_until(func() -> bool: return Game.phase == Game.Phase.RUN, 20.0))
 	check("nível construido", await wait_until(func() -> bool: return not main.level.layout_signature.is_empty()))
 	print("LAYOUT=", main.level.layout_signature)
 	check("props replicados", await wait_until(func() -> bool: return main.props.get_child_count() > 0))
 	check("monstro replicado", await wait_until(func() -> bool: return main.monsters.get_child_count() == 1))
+	check("drones replicados", await wait_until(func() -> bool: return main.drones.get_child_count() == main.drone_count))
+	var seen_drone: Drone = main.drones.get_child(0)
+	var seen_at := seen_drone.net_position
+	check("cliente vê drone voar", await wait_until(func() -> bool: return seen_drone.net_position.distance_to(seen_at) > 0.5, 10.0))
 	var prop: Prop = main.props.get_child(0)
 	check("prop congelado no cliente", prop.freeze)
 
 	await _wait_command("grab_rack")
 	var rack: Prop = main.props.get_node("TestRack")
+	var hud: Control = main.hud
+	check("cliente vê quem já carrega", await wait_until(func() -> bool: return rack.net_holder_ids.size() == 1 and "host está carregando" in hud.carry_status(me, rack).text))
 	me.global_position = Vector3(1.2, 0.1, 0.5)
+	await pause(0.1)
+	var to_rack := rack.net_position - me.head.global_position
+	me.rotation.y = atan2(-to_rack.x, -to_rack.z)
+	me.head.rotation.x = atan2(to_rack.y, Vector2(to_rack.x, to_rack.z).length())
+	check("mirar em carga de aliado oferece ajuda", await wait_until(func() -> bool: return "Ajudar a carregar" in me.hover_text, 1.0))
+	me.rotation.y = 0.0
 	me.head.rotation.x = 0.6
-	await pause(0.3)
+	await pause(0.2)
 	me.try_grab(rack)
 	me.net_hold_distance = 1.8
+	check("cliente vê agarre pendente", "Agarrando" in hud.carry_status(me, rack).text)
+	check("HUD do cliente: está ajudando", await wait_until(func() -> bool: return "Você está ajudando host" in hud.carry_status(me, rack).text))
 
 	await _wait_command("release_rack")
 	me.release_grab(false)
+	check("HUD do cliente: deixou de ajudar", await wait_until(func() -> bool: return not rack.net_holder_ids.has(me.peer_id)))
 	check("cliente ve valor coletado", await wait_until(func() -> bool: return Game.collected > 0, 8.0))
 	check("cliente ve caixa mover", main.props.get_node("TestCrate").net_position.z < 0.0)
 
@@ -496,7 +616,8 @@ func run_client() -> void:
 	check("cliente volta ao lobby", await wait_until(func() -> bool: return Game.phase == Game.Phase.LOBBY, 15.0))
 	check("cliente revivido", await wait_until(func() -> bool: return me.alive and me.health == 100))
 	check("cliente sem props", await wait_until(func() -> bool: return main.props.get_child_count() == 0))
-	check("cliente sem itens", await wait_until(func() -> bool: return main.items.get_child_count() == 0))
+	check("cliente sem drones", await wait_until(func() -> bool: return main.drones.get_child_count() == 0))
+	check("cliente vê itens de volta no lobby", await wait_until(func() -> bool: return main.items.get_child_count() == main.lobby_items.size()))
 	check("cliente sem armas", await wait_until(func() -> bool: return not me.loadout.has_revolver and me.loadout.equipped == ItemDef.Kind.NONE))
 	check("nível limpo", main.level.layout_signature.is_empty())
 

@@ -61,6 +61,43 @@ offset_right = 300.0
 offset_bottom = 60.0
 horizontal_alignment = 1
 
+[node name="CarryPanel" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = 62.0
+offset_right = 300.0
+offset_bottom = 140.0
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="CarryStatus" type="Label" parent="CarryPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+
+[node name="CarryCount" type="Label" parent="CarryPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 1
+
+[node name="CarryPips" type="HBoxContainer" parent="CarryPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+
 [node name="Banner" type="Label" parent="."]
 unique_name_in_owner = true
 layout_mode = 1

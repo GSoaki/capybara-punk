@@ -1,7 +1,8 @@
 class_name WorldItem
 extends RigidBody3D
 ## Item no mundo, simulado no servidor como os props. Parado, pode ser pego do chão.
-## "Ativo" significa cacetete em voo, que machuca quem acertar, ou granada com o pino puxado.
+## "Ativo" significa cacetete em voo, que machuca quem acertar, ou granada arremessada,
+## que explode no primeiro impacto. Largada, a granada é um item comum e não detona.
 
 const IDLE_MASK := 5
 const ACTIVE_MASK := 23
@@ -18,7 +19,6 @@ const BATON_STUN := 0.8
 const BATON_SPIN := 25.0
 const BATON_SETTLE_SPEED := 1.0
 const BATON_MAX_FLIGHT := 8.0
-const FUSE_SECONDS := 2.5
 const BLAST_RADIUS := 7.0
 const BLAST_FORCE := 14.0
 const BLAST_EDGE_FALLOFF := 0.35
@@ -38,6 +38,7 @@ var _timer := 0.0
 var _grace := 0.0
 var _settling := 0.0
 var _hit_cooldown := 0.0
+var _detonating := false
 var _prev_velocity := Vector3.ZERO
 
 @onready var _mesh: MeshInstance3D = $Mesh
@@ -73,7 +74,7 @@ func _ready() -> void:
 	linear_velocity = _launch_velocity
 	if net_active:
 		collision_mask = ACTIVE_MASK
-		_timer = FUSE_SECONDS if def.kind == ItemDef.Kind.GRENADE else BATON_MAX_FLIGHT
+		_timer = BATON_MAX_FLIGHT
 		angular_velocity = _launch_velocity.cross(Vector3.UP).normalized() * BATON_SPIN
 		var thrower := Game.players.get(_thrower_id) as Player
 		if thrower:
@@ -101,14 +102,9 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 	_tick_grace(delta)
-	if net_active:
+	if net_active and def.kind == ItemDef.Kind.BATON:
 		_timer -= delta
-		if def.kind == ItemDef.Kind.GRENADE:
-			if _timer <= 0.0:
-				_explode()
-				return
-		else:
-			_tick_baton_flight(delta)
+		_tick_baton_flight(delta)
 	_prev_velocity = linear_velocity
 	if position.distance_squared_to(net_position) > 0.000001:
 		net_position = position
@@ -134,7 +130,13 @@ func _tick_baton_flight(delta: float) -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if not net_active or def.kind != ItemDef.Kind.BATON:
+	if not net_active:
+		return
+	if def.kind == ItemDef.Kind.GRENADE:
+		if not _detonating:
+			_detonating = true
+			# O sinal chega durante o passo de física, quando mover corpos e criar nós é proibido.
+			_explode.call_deferred()
 		return
 	var speed := _prev_velocity.length()
 	if speed < BATON_MIN_HIT_SPEED:
@@ -166,6 +168,10 @@ func _explode() -> void:
 		var dir_force := _blast_push(center, monster.global_position + Vector3.UP * 1.1)
 		if dir_force != Vector3.ZERO:
 			monster.server_hit(0, dir_force, BLAST_STUN)
+	for drone: Drone in main.drones.get_children():
+		var dir_force := _blast_push(center, drone.global_position)
+		if dir_force != Vector3.ZERO:
+			drone.server_hit(0, dir_force, BLAST_STUN)
 	for prop: Prop in main.props.get_children():
 		var dir_force := _blast_push(center, prop.global_position)
 		if dir_force != Vector3.ZERO:

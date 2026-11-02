@@ -7,12 +7,16 @@ const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROP_SCENE := preload("res://scenes/prop.tscn")
 const MONSTER_SCENE := preload("res://scenes/monster.tscn")
 const ITEM_SCENE := preload("res://scenes/item.tscn")
+const DRONE_SCENE := preload("res://scenes/drone.tscn")
 
 @export var loot_table: Array[PropDef] = []
 @export var monster_count := 1
-## Colocados em fila logo na entrada de toda run.
-@export var entry_items: Array[ItemDef] = []
-## Sorteados nas salas seguintes.
+@export var drone_count := 2
+## Salas em cada circuito de drone.
+@export var drone_patrol_length := 4
+## Colocados em fila no van ao abrir a sessão e de novo a cada fim de run.
+@export var lobby_items: Array[ItemDef] = []
+## Sorteados nas salas durante a run.
 @export var item_table: Array[ItemDef] = []
 
 var _next_id := 0
@@ -21,11 +25,13 @@ var _next_id := 0
 @onready var props: Node3D = $Props
 @onready var monsters: Node3D = $Monsters
 @onready var items: Node3D = $Items
+@onready var drones: Node3D = $Drones
 @onready var weapon_fx: WeaponFx = $WeaponFx
 @onready var level: LevelGenerator = $Level
 @onready var menu_camera: Camera3D = $MenuCamera
 @onready var gate: CSGBox3D = $Van/Gate
 @onready var spawn_points: Node3D = $Van/SpawnPoints
+@onready var lobby_item_spot: Marker3D = $Van/LobbyItemSpot
 @onready var main_menu: Control = $UI/MainMenu
 @onready var hud: Control = $UI/HUD
 @onready var pause_menu: Control = $UI/PauseMenu
@@ -36,6 +42,7 @@ func _ready() -> void:
 	$PropSpawner.spawn_function = _spawn_prop
 	$MonsterSpawner.spawn_function = _spawn_monster
 	$ItemSpawner.spawn_function = _spawn_item
+	$DroneSpawner.spawn_function = _spawn_drone
 	Net.player_joined.connect(_on_player_joined)
 	Net.player_left.connect(_on_player_left)
 	Net.session_started.connect(_on_session_started)
@@ -125,6 +132,12 @@ func _spawn_item(data: Dictionary) -> Node:
 	return item
 
 
+func _spawn_drone(data: Dictionary) -> Node:
+	var drone: Drone = DRONE_SCENE.instantiate()
+	drone.setup(data)
+	return drone
+
+
 func _on_player_joined(peer_id: int) -> void:
 	if multiplayer.is_server():
 		$PlayerSpawner.spawn({"id": peer_id, "pos": spawn_point(players.get_child_count())})
@@ -142,10 +155,12 @@ func _on_player_left(peer_id: int) -> void:
 func _on_session_started() -> void:
 	main_menu.hide()
 	hud.show()
+	if multiplayer.is_server():
+		_spawn_lobby_items()
 
 
 func _on_session_ended(reason: String) -> void:
-	for container: Node in [players, props, monsters, items]:
+	for container: Node in [players, props, monsters, items, drones]:
 		for child in container.get_children():
 			child.free()
 	level.clear()
@@ -179,12 +194,27 @@ func _on_run_started(level_seed: int) -> void:
 	for i in monster_count:
 		_next_id += 1
 		$MonsterSpawner.spawn({"name": "Monster%d" % _next_id, "pos": level.monster_spot})
+	_spawn_drones()
+
+
+func _spawn_lobby_items() -> void:
+	for i in lobby_items.size():
+		var offset := (i - (lobby_items.size() - 1) * 0.5) * 0.9
+		spawn_item(lobby_items[i], lobby_item_spot.global_position + Vector3.RIGHT * offset)
+
+
+func _spawn_drones() -> void:
+	for i in drone_count:
+		var rooms := level.patrol_spots.duplicate()
+		rooms.shuffle()
+		_next_id += 1
+		$DroneSpawner.spawn({
+			"name": "Drone%d" % _next_id,
+			"waypoints": PackedVector3Array(rooms.slice(0, drone_patrol_length)),
+		})
 
 
 func _spawn_run_items(rng: RandomNumberGenerator) -> void:
-	for i in entry_items.size():
-		var offset := (i - (entry_items.size() - 1) * 0.5) * 0.9
-		spawn_item(entry_items[i], level.entry_spot + Vector3.RIGHT * offset)
 	var weights := PackedFloat32Array()
 	for def in item_table:
 		weights.append(def.spawn_weight)
@@ -198,9 +228,10 @@ func _on_run_ended(_success: bool) -> void:
 	level.clear()
 	if not multiplayer.is_server():
 		return
-	for container: Node in [props, monsters, items]:
+	for container: Node in [props, monsters, items, drones]:
 		for child in container.get_children():
 			child.queue_free()
+	_spawn_lobby_items()
 	var index := 0
 	for player: Player in Game.players.values():
 		player.server_revive(spawn_point(index))

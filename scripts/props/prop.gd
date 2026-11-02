@@ -15,6 +15,8 @@ var def: PropDef
 var net_position := Vector3.ZERO
 var net_rotation := Quaternion.IDENTITY
 var net_value := 0
+## Quem está segurando, em ordem de chegada. Replicado para o HUD de todos os peers.
+var net_holder_ids := PackedInt32Array()
 
 ## peer_id -> Player. Somente no servidor.
 var holders: Dictionary = {}
@@ -64,10 +66,40 @@ func _physics_process(delta: float) -> void:
 	_impact_cooldown = maxf(_impact_cooldown - delta, 0.0)
 	_prev_speed = linear_velocity.length()
 	_apply_holders()
+	_publish_holders()
 	if position.distance_squared_to(net_position) > 0.000001:
 		net_position = position
 	if not quaternion.is_equal_approx(net_rotation):
 		net_rotation = quaternion
+
+
+## Quantas pessoas de força normal são necessárias para tirar o objeto do chão.
+func people_needed() -> int:
+	return maxi(ceili(_weight() / GRIP_FORCE), 1)
+
+
+## Quantas pessoas de força normal ainda faltam, considerando os braços de quem já segura.
+func people_missing() -> int:
+	if net_holder_ids.is_empty():
+		return people_needed()
+	var force := 0.0
+	for peer_id: int in net_holder_ids:
+		var player := Game.players.get(peer_id) as Player
+		if player:
+			force += player.get_grip_force()
+	return maxi(ceili((_weight() - force) / GRIP_FORCE), 0)
+
+
+func _weight() -> float:
+	return mass * float(ProjectSettings.get_setting("physics/3d/default_gravity"))
+
+
+func _publish_holders() -> void:
+	if holders.is_empty() and net_holder_ids.is_empty():
+		return
+	var ids := PackedInt32Array(holders.keys())
+	if ids != net_holder_ids:
+		net_holder_ids = ids
 
 
 func _apply_holders() -> void:
@@ -112,6 +144,9 @@ func request_grab() -> void:
 	if player and player.alive and player.can_hold_props() and player.global_position.distance_to(global_position) <= GRAB_RANGE:
 		holders[id] = player
 		sleeping = false
+	elif player:
+		# Sem o aviso, o cliente acreditaria estar segurando e ficaria lento pelo peso.
+		player.grab_lost.rpc_id(id)
 
 
 @rpc("any_peer", "call_local", "reliable")
