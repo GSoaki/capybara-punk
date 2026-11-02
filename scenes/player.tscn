@@ -1,0 +1,102 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/player.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/net/voice_output.gd" id="2"]
+
+[sub_resource type="CapsuleShape3D" id="shape"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="body"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="BoxMesh" id="visor"]
+size = Vector3(0.5, 0.18, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="visor_mat"]
+albedo_color = Color(0.1, 0.12, 0.16, 1)
+metallic = 0.8
+roughness = 0.2
+
+[sub_resource type="SceneReplicationConfig" id="replication"]
+properties/0/path = NodePath(".:net_position")
+properties/0/spawn = false
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:net_yaw")
+properties/1/spawn = false
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:net_pitch")
+properties/2/spawn = false
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:net_hold_distance")
+properties/3/spawn = false
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:net_crouching")
+properties/4/spawn = false
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:net_sprinting")
+properties/5/spawn = false
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:net_knocked")
+properties/6/spawn = false
+properties/6/replication_mode = 2
+properties/7/path = NodePath(".:net_flashlight")
+properties/7/spawn = false
+properties/7/replication_mode = 2
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 13
+script = ExtResource("1")
+
+[node name="Collider" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("shape")
+
+[node name="Visuals" type="Node3D" parent="."]
+
+[node name="Body" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+mesh = SubResource("body")
+
+[node name="Visor" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -0.27)
+mesh = SubResource("visor")
+surface_material_override/0 = SubResource("visor_mat")
+
+[node name="Head" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head"]
+fov = 80.0
+
+[node name="Flashlight" type="SpotLight3D" parent="Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.2, -0.2, 0)
+light_energy = 3.0
+spot_range = 22.0
+spot_angle = 32.0
+visible = false
+
+[node name="InteractRay" type="RayCast3D" parent="Head"]
+target_position = Vector3(0, 0, -3.5)
+collision_mask = 13
+collide_with_areas = false
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+billboard = 1
+font_size = 28
+outline_size = 6
+
+[node name="VoiceOutput" type="AudioStreamPlayer3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+script = ExtResource("2")
+unit_size = 6.0
+max_distance = 35.0
+bus = &"Voice"
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.05
+delta_interval = 0.05
+replication_config = SubResource("replication")

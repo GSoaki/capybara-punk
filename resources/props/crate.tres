@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PropDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/props/prop_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Caixa"
+size = Vector3(0.6,0.5,0.6)
+color = Color(0.62,0.45,0.28, 1)
+mass = 8.0
+min_value = 25
+max_value = 60
+impact_threshold = 7.0
+fragility = 0.08
+spawn_weight = 3.0

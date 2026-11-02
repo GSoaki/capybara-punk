@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PropDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/props/prop_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Vaso antigo"
+size = Vector3(0.35,0.7,0.35)
+color = Color(0.3,0.7,0.8, 1)
+mass = 4.0
+min_value = 70
+max_value = 140
+impact_threshold = 3.0
+fragility = 0.3
+spawn_weight = 1.5
