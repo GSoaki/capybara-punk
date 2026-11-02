@@ -15,14 +15,19 @@ enum State { ROAM, INVESTIGATE, CHASE }
 @export var attack_damage := 34
 @export var attack_cooldown := 1.5
 @export var knock_force := 9.0
+@export var max_health := 100
+## Desaceleração enquanto atordoado, em m/s².
+@export var stun_drag := 7.0
 
 var state := State.ROAM
+var health := 0
 var net_position := Vector3.ZERO
 var net_yaw := 0.0
 
 var _target_player: Player
 var _state_timer := 0.0
 var _attack_timer := 0.0
+var _stun_timer := 0.0
 
 @onready var agent: NavigationAgent3D = $Agent
 
@@ -34,6 +39,7 @@ func setup(data: Dictionary) -> void:
 
 
 func _ready() -> void:
+	health = max_health
 	if multiplayer.is_server():
 		Game.noise_emitted.connect(_on_noise)
 	else:
@@ -48,10 +54,14 @@ func _physics_process(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, net_yaw, weight)
 		return
 	_attack_timer = maxf(_attack_timer - delta, 0.0)
-	_state_timer -= delta
-	_think()
-	_move(delta)
-	_try_attack()
+	if _stun_timer > 0.0:
+		_stun_timer -= delta
+		_move_stunned(delta)
+	else:
+		_state_timer -= delta
+		_think()
+		_move(delta)
+		_try_attack()
 	net_position = position
 	net_yaw = rotation.y
 
@@ -94,6 +104,25 @@ func _move(delta: float) -> void:
 	velocity.z = horizontal.z
 	velocity.y = 0.0 if is_on_floor() else velocity.y + get_gravity().y * delta
 	move_and_slide()
+
+
+func _move_stunned(delta: float) -> void:
+	velocity.x = move_toward(velocity.x, 0.0, stun_drag * delta)
+	velocity.z = move_toward(velocity.z, 0.0, stun_drag * delta)
+	velocity.y += get_gravity().y * delta
+	move_and_slide()
+
+
+## Servidor. Mesma assinatura de Player.server_hit, para as armas tratarem os dois igual.
+func server_hit(damage: int, knock: Vector3, stun := 1.5) -> void:
+	if not multiplayer.is_server() or health <= 0:
+		return
+	health = maxi(health - damage, 0)
+	if health == 0:
+		queue_free()
+		return
+	velocity = knock
+	_stun_timer = maxf(_stun_timer, stun)
 
 
 func _find_visible_player() -> Player:

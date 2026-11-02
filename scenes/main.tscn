@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/props/prop_def.gd" id="2"]
@@ -11,6 +11,12 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/main_menu.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="10"]
 [ext_resource type="PackedScene" path="res://scenes/ui/pause_menu.tscn" id="11"]
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="12"]
+[ext_resource type="Resource" path="res://resources/items/revolver.tres" id="13"]
+[ext_resource type="Resource" path="res://resources/items/baton.tres" id="14"]
+[ext_resource type="Resource" path="res://resources/items/grenade.tres" id="15"]
+[ext_resource type="Resource" path="res://resources/items/ammo.tres" id="16"]
+[ext_resource type="Script" path="res://scripts/items/weapon_fx.gd" id="17"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -39,6 +45,8 @@ emission_energy_multiplier = 0.4
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
 loot_table = Array[ExtResource("2")]([ExtResource("3"), ExtResource("4"), ExtResource("5")])
+entry_items = Array[ExtResource("12")]([ExtResource("13"), ExtResource("16"), ExtResource("14"), ExtResource("15")])
+item_table = Array[ExtResource("12")]([ExtResource("13"), ExtResource("14"), ExtResource("15"), ExtResource("16")])
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
@@ -157,6 +165,11 @@ material = SubResource("zone_mat")
 
 [node name="Monsters" type="Node3D" parent="."]
 
+[node name="Items" type="Node3D" parent="."]
+
+[node name="WeaponFx" type="Node3D" parent="."]
+script = ExtResource("17")
+
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("../Players")
 
@@ -165,6 +178,9 @@ spawn_path = NodePath("../Props")
 
 [node name="MonsterSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("../Monsters")
+
+[node name="ItemSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Items")
 
 [node name="UI" type="CanvasLayer" parent="."]
 

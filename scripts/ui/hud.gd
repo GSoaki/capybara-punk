@@ -7,6 +7,7 @@ extends Control
 @onready var health_bar: ProgressBar = %HealthBar
 @onready var stamina_bar: ProgressBar = %StaminaBar
 @onready var mic_bar: ProgressBar = %MicBar
+@onready var loadout_label: Label = %LoadoutLabel
 
 
 func _process(_delta: float) -> void:
@@ -29,6 +30,7 @@ func _process(_delta: float) -> void:
 		health_bar.value = me.health
 		stamina_bar.value = me.stamina
 		prompt.text = me.hover_text
+		loadout_label.text = me.loadout.hud_text()
 
 
 func _objective_text() -> String:

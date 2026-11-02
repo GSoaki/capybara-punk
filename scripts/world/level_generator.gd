@@ -19,6 +19,9 @@ const DIRECTIONS: Array[Vector2i] = [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN,
 @export_range(0.0, 1.0) var extra_door_chance := 0.2
 
 var prop_spots: Array[Vector3] = []
+var item_spots: Array[Vector3] = []
+## Logo depois do portão do van, na primeira sala.
+var entry_spot := Vector3.ZERO
 var monster_spot := Vector3.ZERO
 var layout_signature := ""
 
@@ -58,6 +61,7 @@ func generate(level_seed: int) -> void:
 			for dir in DIRECTIONS:
 				layout_signature += "1" if _is_open(cell, dir) else "0"
 	monster_spot = _cell_center(last_cell) + Vector3.UP
+	entry_spot = _cell_center(_entry) + Vector3(0.0, 0.4, 3.0)
 	if multiplayer.is_server():
 		bake_finished.connect(func() -> void: navigation_ready.emit(), CONNECT_ONE_SHOT)
 		bake_navigation_mesh(true)
@@ -67,6 +71,7 @@ func clear() -> void:
 	for child in get_children():
 		child.queue_free()
 	prop_spots.clear()
+	item_spots.clear()
 	_openings.clear()
 	layout_signature = ""
 	if navigation_mesh:
@@ -158,6 +163,8 @@ func _build_room(cell: Vector2i, material: Material, rng: RandomNumberGenerator)
 		lamp.light_color = Color(1.0, 0.85, 0.65)
 		add_child(lamp)
 	if cell != _entry:
+		if rng.randf() < 0.6:
+			item_spots.append(center + Vector3(rng.randf_range(-5.0, -3.2) * (1 if rng.randf() < 0.5 else -1), 0.4, rng.randf_range(-4.5, 4.5)))
 		for i in rng.randi_range(1, 3):
 			prop_spots.append(center + Vector3(rng.randf_range(-5.0, -3.2) * (1 if rng.randf() < 0.5 else -1), 1.2, rng.randf_range(-4.5, 4.5)))
 

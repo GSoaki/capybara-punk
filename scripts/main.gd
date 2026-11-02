@@ -1,3 +1,4 @@
+class_name Main
 extends Node3D
 ## Cena única da sessão. Instancia jogadores, loot e monstros pelos MultiplayerSpawner
 ## e reage as transições do autoload Game. Trocar de cena aqui quebraria os caminhos de RPC.
@@ -5,15 +6,22 @@ extends Node3D
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROP_SCENE := preload("res://scenes/prop.tscn")
 const MONSTER_SCENE := preload("res://scenes/monster.tscn")
+const ITEM_SCENE := preload("res://scenes/item.tscn")
 
 @export var loot_table: Array[PropDef] = []
 @export var monster_count := 1
+## Colocados em fila logo na entrada de toda run.
+@export var entry_items: Array[ItemDef] = []
+## Sorteados nas salas seguintes.
+@export var item_table: Array[ItemDef] = []
 
 var _next_id := 0
 
 @onready var players: Node3D = $Players
 @onready var props: Node3D = $Props
 @onready var monsters: Node3D = $Monsters
+@onready var items: Node3D = $Items
+@onready var weapon_fx: WeaponFx = $WeaponFx
 @onready var level: LevelGenerator = $Level
 @onready var menu_camera: Camera3D = $MenuCamera
 @onready var gate: CSGBox3D = $Van/Gate
@@ -27,6 +35,7 @@ func _ready() -> void:
 	$PlayerSpawner.spawn_function = _spawn_player
 	$PropSpawner.spawn_function = _spawn_prop
 	$MonsterSpawner.spawn_function = _spawn_monster
+	$ItemSpawner.spawn_function = _spawn_item
 	Net.player_joined.connect(_on_player_joined)
 	Net.player_left.connect(_on_player_left)
 	Net.session_started.connect(_on_session_started)
@@ -77,6 +86,20 @@ func spawn_prop(def: PropDef, at: Vector3, node_name: String = "") -> Prop:
 	})
 
 
+## Servidor. Com amount negativo, usa a quantidade padrão do tipo de item.
+func spawn_item(def: ItemDef, at: Vector3, velocity := Vector3.ZERO, active := false, amount := -1, thrower := 0) -> WorldItem:
+	_next_id += 1
+	return $ItemSpawner.spawn({
+		"def": def.resource_path,
+		"name": "Item%d" % _next_id,
+		"amount": amount if amount >= 0 else def.amount,
+		"pos": at,
+		"velocity": velocity,
+		"active": active,
+		"thrower": thrower,
+	})
+
+
 func _spawn_player(data: Dictionary) -> Node:
 	var player: Player = PLAYER_SCENE.instantiate()
 	player.name = str(data.id)
@@ -96,6 +119,12 @@ func _spawn_monster(data: Dictionary) -> Node:
 	return monster
 
 
+func _spawn_item(data: Dictionary) -> Node:
+	var item: WorldItem = ITEM_SCENE.instantiate()
+	item.setup(data)
+	return item
+
+
 func _on_player_joined(peer_id: int) -> void:
 	if multiplayer.is_server():
 		$PlayerSpawner.spawn({"id": peer_id, "pos": spawn_point(players.get_child_count())})
@@ -104,6 +133,8 @@ func _on_player_joined(peer_id: int) -> void:
 func _on_player_left(peer_id: int) -> void:
 	var player := players.get_node_or_null(str(peer_id))
 	if player:
+		if multiplayer.is_server():
+			player.loadout.server_drop_all()
 		player.free()
 		Game.check_all_dead()
 
@@ -114,7 +145,7 @@ func _on_session_started() -> void:
 
 
 func _on_session_ended(reason: String) -> void:
-	for container: Node in [players, props, monsters]:
+	for container: Node in [players, props, monsters, items]:
 		for child in container.get_children():
 			child.free()
 	level.clear()
@@ -144,9 +175,21 @@ func _on_run_started(level_seed: int) -> void:
 		weights.append(def.spawn_weight)
 	for spot in level.prop_spots:
 		spawn_prop(loot_table[rng.rand_weighted(weights)], spot)
+	_spawn_run_items(rng)
 	for i in monster_count:
 		_next_id += 1
 		$MonsterSpawner.spawn({"name": "Monster%d" % _next_id, "pos": level.monster_spot})
+
+
+func _spawn_run_items(rng: RandomNumberGenerator) -> void:
+	for i in entry_items.size():
+		var offset := (i - (entry_items.size() - 1) * 0.5) * 0.9
+		spawn_item(entry_items[i], level.entry_spot + Vector3.RIGHT * offset)
+	var weights := PackedFloat32Array()
+	for def in item_table:
+		weights.append(def.spawn_weight)
+	for spot in level.item_spots:
+		spawn_item(item_table[rng.rand_weighted(weights)], spot)
 
 
 func _on_run_ended(_success: bool) -> void:
@@ -155,7 +198,7 @@ func _on_run_ended(_success: bool) -> void:
 	level.clear()
 	if not multiplayer.is_server():
 		return
-	for container: Node in [props, monsters]:
+	for container: Node in [props, monsters, items]:
 		for child in container.get_children():
 			child.queue_free()
 	var index := 0

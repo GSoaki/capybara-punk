@@ -43,6 +43,7 @@ var net_flashlight := false
 var net_hold_distance := 2.0
 
 var _knock_timer := 0.0
+var _stagger_timer := 0.0
 var _exhausted := false
 var _spawn_position := Vector3.ZERO
 var _prev_fall_speed := 0.0
@@ -60,6 +61,7 @@ var _mouse_settle := MOUSE_SETTLE_SECONDS
 @onready var collider: CollisionShape3D = $Collider
 @onready var name_label: Label3D = $NameLabel
 @onready var voice_output: VoiceOutput = $VoiceOutput
+@onready var loadout: Loadout = $Loadout
 
 
 func _enter_tree() -> void:
@@ -128,16 +130,33 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("grab"):
 		var target: Variant = ray.get_collider()
-		if target is Prop:
+		if loadout.equipped != ItemDef.Kind.NONE:
+			loadout.use_primary()
+		elif target is Prop:
 			try_grab(target)
 	elif event.is_action_released("grab"):
 		release_grab(false)
 	elif event.is_action_pressed("throw"):
-		release_grab(true)
+		if is_instance_valid(held_prop):
+			release_grab(true)
+		else:
+			loadout.use_secondary()
 	elif event.is_action_pressed("interact"):
 		var target: Variant = ray.get_collider()
 		if target is Lever:
 			target.request_use.rpc_id(1)
+		elif target is WorldItem:
+			loadout.try_take(target)
+	elif event.is_action_pressed("slot_1"):
+		loadout.equip(ItemDef.Kind.REVOLVER)
+	elif event.is_action_pressed("slot_2"):
+		loadout.equip(ItemDef.Kind.BATON)
+	elif event.is_action_pressed("slot_3"):
+		loadout.equip(ItemDef.Kind.GRENADE)
+	elif event.is_action_pressed("reload"):
+		loadout.reload()
+	elif event.is_action_pressed("drop_item"):
+		loadout.drop_equipped()
 	elif event.is_action_pressed("flashlight"):
 		net_flashlight = not net_flashlight
 	elif event.is_action_pressed("hold_further"):
@@ -157,6 +176,23 @@ func release_grab(throw: bool) -> void:
 	if is_instance_valid(held_prop):
 		held_prop.request_release.rpc_id(1, throw)
 	held_prop = null
+
+
+func can_act() -> bool:
+	return alive and _knock_timer <= 0.0
+
+
+## Dono: recuo de arma. Soma à velocidade e reduz o controle, sem derrubar por si só.
+func apply_recoil(impulse: Vector3, stagger: float, pitch_kick: float, yaw_kick: float) -> void:
+	velocity += impulse
+	_stagger_timer = maxf(_stagger_timer, stagger)
+	head.rotation.x = clampf(head.rotation.x + pitch_kick, -1.5, 1.5)
+	rotation.y += yaw_kick
+
+
+func knock_down(seconds: float) -> void:
+	_knock_timer = maxf(_knock_timer, seconds)
+	release_grab(false)
 
 
 func _process(delta: float) -> void:
@@ -209,9 +245,11 @@ func _local_physics(delta: float) -> void:
 	var sprinting := _update_movement(delta, has_control, crouching)
 	var was_airborne := not is_on_floor()
 	_prev_fall_speed = -velocity.y
+	var velocity_before := velocity
 	move_and_slide()
 	if was_airborne and is_on_floor() and _prev_fall_speed > SAFE_FALL_SPEED:
 		_request_fall_damage.rpc_id(1, _prev_fall_speed)
+	_check_wall_slam(velocity_before)
 	_push_props(delta)
 	_publish_state(crouching, sprinting)
 	_update_hover()
@@ -219,10 +257,19 @@ func _local_physics(delta: float) -> void:
 		held_prop = null
 
 
+## Bater numa parede depois de ser arremessado dói como uma queda da mesma velocidade.
+func _check_wall_slam(velocity_before: Vector3) -> void:
+	if (_stagger_timer > 0.0 or _knock_timer > 0.0) and is_on_wall():
+		var slam_speed := -velocity_before.dot(get_wall_normal())
+		if slam_speed > SAFE_FALL_SPEED:
+			_request_fall_damage.rpc_id(1, slam_speed)
+
+
 func _update_movement(delta: float, has_control: bool, crouching: bool) -> bool:
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 	_knock_timer = maxf(_knock_timer - delta, 0.0)
+	_stagger_timer = maxf(_stagger_timer - delta, 0.0)
 	var input := Vector2.ZERO
 	if has_control:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -238,7 +285,7 @@ func _update_movement(delta: float, has_control: bool, crouching: bool) -> bool:
 		speed *= clampf(1.0 - held_prop.mass / 120.0, 0.45, 1.0)
 	var wish := (transform.basis * Vector3(input.x, 0.0, input.y)) * speed
 	var accel := acceleration if is_on_floor() else acceleration * 0.2
-	if _knock_timer > 0.0:
+	if _knock_timer > 0.0 or _stagger_timer > 0.0:
 		accel = 6.0
 	velocity.x = move_toward(velocity.x, wish.x, accel * delta)
 	velocity.z = move_toward(velocity.z, wish.z, accel * delta)
@@ -284,7 +331,10 @@ func _publish_state(crouching: bool, sprinting: bool) -> void:
 func _update_hover() -> void:
 	var target: Variant = ray.get_collider()
 	if target is Prop:
-		hover_text = "[Botão esq.] Agarrar  %s  $%d" % [target.def.display_name, target.net_value]
+		var action := "[Botão esq.] Agarrar" if loadout.equipped == ItemDef.Kind.NONE else "Guarde a arma para agarrar"
+		hover_text = "%s  %s  $%d" % [action, target.def.display_name, target.net_value]
+	elif target is WorldItem and target.can_take():
+		hover_text = target.get_prompt() if loadout.can_take(target.def) else "Sem espaço para %s" % target.def.display_name
 	elif target is Lever:
 		hover_text = "[E] %s" % target.get_prompt()
 	else:
@@ -303,19 +353,21 @@ func _update_spectator() -> void:
 
 
 ## Servidor: aplica dano e empurrao. O dono executa o empurrao, pois controla a física.
-func server_hit(damage: int, knock: Vector3) -> void:
+func server_hit(damage: int, knock: Vector3, stun := 1.5) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	health = maxi(health - damage, 0)
 	_sync_vitals.rpc(health, health > 0)
 	if health > 0:
-		_receive_knock.rpc_id(peer_id, knock)
+		_receive_knock.rpc_id(peer_id, knock, stun)
 	else:
+		loadout.server_drop_all()
 		Game.check_all_dead()
 
 
 func server_revive(spawn_position: Vector3) -> void:
 	if multiplayer.is_server():
+		loadout.server_reset()
 		_revive.rpc(spawn_position)
 
 
@@ -329,11 +381,11 @@ func _sync_vitals(new_health: int, is_alive: bool) -> void:
 
 
 @rpc("any_peer", "call_local", "reliable")
-func _receive_knock(knock: Vector3) -> void:
+func _receive_knock(knock: Vector3, stun: float) -> void:
 	if Net.sender_id() != 1:
 		return
 	velocity = knock
-	_knock_timer = 1.5
+	_knock_timer = stun
 	release_grab(false)
 
 
@@ -344,6 +396,7 @@ func _revive(spawn_position: Vector3) -> void:
 	health = 100
 	stamina = 100.0
 	_knock_timer = 0.0
+	_stagger_timer = 0.0
 	_set_alive(true)
 	net_position = spawn_position
 	global_position = spawn_position

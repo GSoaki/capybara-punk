@@ -6,7 +6,7 @@ var role := ""
 var port := 0
 var failures := 0
 
-@onready var main: Node = get_parent()
+@onready var main: Main = get_parent()
 
 
 func configure(p_role: String, p_port: int) -> void:
@@ -16,7 +16,7 @@ func configure(p_role: String, p_port: int) -> void:
 
 func _ready() -> void:
 	Settings.player_name = role
-	get_tree().create_timer(150.0).timeout.connect(_on_timeout)
+	get_tree().create_timer(240.0).timeout.connect(_on_timeout)
 	test_codec()
 	if role == "host":
 		await run_host()
@@ -150,20 +150,271 @@ func run_host() -> void:
 	_ready_for_client.rpc("send_voice")
 	check("voz recebida", await wait_until(func() -> bool: return remote.voice_frames_received > 0, 5.0))
 	check("voz vira barulho", heard[0] > 0.1)
+	await test_weapons_host(me, remote, monster, crate)
 	main.monsters.get_child(0).set_physics_process(true)
 
 	# Todos mortos encerram a run com falha e voltam ao lobby revividos.
-	me.server_hit(999, Vector3.ZERO)
 	remote.server_hit(999, Vector3.ZERO)
+	me.server_hit(999, Vector3.ZERO)
 	check("run encerra sem sobreviventes", Game.phase == Game.Phase.RESULTS)
 	check("voltou ao lobby", await wait_until(func() -> bool: return Game.phase == Game.Phase.LOBBY, 10.0))
 	check("todos revividos", me.alive and remote.alive and remote.health == 100)
 	check("props limpos", main.props.get_child_count() == 0)
 	check("monstros limpos", main.monsters.get_child_count() == 0)
+	check("itens limpos", main.items.get_child_count() == 0)
+	check("inventário zerado ao voltar", not me.loadout.has_revolver and remote.loadout.reserve == 0)
 
 	_ready_for_client.rpc("leave")
 	var gone := func() -> bool: return Net.roster.size() == 1 and main.players.get_child_count() == 1
 	check("cliente removido ao sair", await wait_until(gone))
+
+
+func def_item(path: String) -> ItemDef:
+	return load("res://resources/items/%s.tres" % path)
+
+
+## Coloca o jogador em um ponto, olhando para o rumo dado (0 = -Z, PI = +Z), sem velocidade.
+func place(player: Player, at: Vector3, yaw: float = 0.0) -> void:
+	player.global_position = at
+	player.rotation.y = yaw
+	player.head.rotation.x = 0.0
+	player.velocity = Vector3.ZERO
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+
+func spawn_and_take(player: Player, path: String) -> void:
+	var item := main.spawn_item(def_item(path), player.global_position + Vector3(0.6, 0.5, 0.0))
+	await pause(0.1)
+	player.loadout.try_take(item)
+	await pause(0.1)
+
+
+func horizontal_speed(player: Player) -> float:
+	return Vector2(player.velocity.x, player.velocity.z).length()
+
+
+func active_item(kind: ItemDef.Kind) -> WorldItem:
+	for item: WorldItem in main.items.get_children():
+		if item.net_active and item.def.kind == kind:
+			return item
+	return null
+
+
+func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop) -> void:
+	var loadout := me.loadout
+	check("itens gerados na entrada", main.items.get_child_count() >= main.entry_items.size())
+	for item: WorldItem in main.items.get_children():
+		item.queue_free()
+	await pause(0.1)
+	monster.global_position = Vector3(0.0, 0.0, -60.0)
+
+	# Pegar do chão equipa o revólver, e munição fica na reserva sem trocar a mão.
+	await place(me, Vector3(0.0, 0.1, 1.0), PI)
+	var aimed := main.spawn_item(def_item("revolver"), Vector3(0.0, 0.3, 2.5))
+	await pause(0.5)
+	me.head.rotation.x = atan2(aimed.global_position.y - me.head.global_position.y, aimed.global_position.z - me.head.global_position.z)
+	var prompted := func() -> bool: return me.hover_text == aimed.get_prompt()
+	check("mirar no item mostra como pegar", await wait_until(prompted, 1.0))
+	aimed.queue_free()
+	await pause(0.1)
+	await spawn_and_take(me, "revolver")
+	check("pega revólver", loadout.has_revolver and loadout.loaded == loadout.cylinder_size)
+	check("revólver equipado", loadout.equipped == ItemDef.Kind.REVOLVER)
+	check("item sai do chão", main.items.get_child_count() == 0)
+	await spawn_and_take(me, "ammo")
+	check("munição vai para a reserva", loadout.reserve == 5 and loadout.equipped == ItemDef.Kind.REVOLVER)
+
+	# Um tiro isolado empurra para trás; olhando para +Z, o recuo é -Z.
+	await place(me, Vector3(0.0, 0.1, 1.0), PI)
+	loadout.use_primary()
+	var single_speed := horizontal_speed(me)
+	check("tiro empurra para trás (v=%.1f)" % single_speed, me.velocity.z < -1.5)
+	check("primeiro tiro não acumula", loadout.recoil_stack == 1)
+	check("tiro gasta munição", loadout.loaded == loadout.cylinder_size - 1)
+	await pause(1.2)
+	loadout.use_primary()
+	check("tiros espaçados não somam", loadout.recoil_stack == 1)
+	await pause(1.2)
+
+	# Recarregar não pode ultrapassar o tambor nem o que há na reserva.
+	loadout.reload()
+	check("recarga em andamento", loadout.reloading)
+	check("recarga termina", await wait_until(func() -> bool: return not loadout.reloading, 3.0))
+	check("tambor cheio", loadout.loaded == loadout.cylinder_size and loadout.reserve == 3)
+
+	# Atirar rápido soma a força: o quinto tiro seguido derruba e faz a arma escapar.
+	await pause(1.2)
+	await place(me, Vector3(0.0, 0.1, 1.0), PI)
+	me.health = 100
+	var peak := 0.0
+	var knocked := false
+	for i in loadout.cylinder_size:
+		loadout.use_primary()
+		peak = maxf(peak, horizontal_speed(me))
+		knocked = knocked or me.net_knocked
+		await pause(loadout.fire_interval + 0.03)
+	knocked = knocked or me.net_knocked
+	check("força somada (pico=%.1f, um tiro=%.1f)" % [peak, single_speed], peak > single_speed * 2.5)
+	check("rajada derruba", knocked)
+	check("rajada faz a arma escapar", not loadout.has_revolver and loadout.equipped == ItemDef.Kind.NONE)
+	check("arma caída vira item", main.items.get_child_count() == 1)
+	await pause(1.5)
+	for item: WorldItem in main.items.get_children():
+		item.queue_free()
+	await pause(0.1)
+
+	# Tiro acerta monstro com pouco dano.
+	await place(me, Vector3(0.0, 0.1, 1.0))
+	await spawn_and_take(me, "revolver")
+	monster.global_position = Vector3(0.0, 0.0, -2.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	await pause(1.0)
+	var health_before := monster.health
+	loadout.use_primary()
+	check("tiro fere com pouco dano", monster.health == health_before - loadout.shot_damage)
+
+	# Corpo a corpo fere e empurra quem está perto. Atravessar a parede não vale.
+	await spawn_and_take(me, "baton")
+	loadout.equip(ItemDef.Kind.BATON)
+	check("troca para cacetete", loadout.equipped == ItemDef.Kind.BATON)
+	monster.global_position = Vector3(0.0, 0.0, -0.3)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	await place(me, Vector3(0.0, 0.1, 1.0))
+	health_before = monster.health
+	loadout.use_primary()
+	check("cacetete fere de perto", monster.health == health_before - loadout.melee_damage)
+	monster.global_position = Vector3(0.0, 0.0, -60.0)
+	await get_tree().physics_frame
+
+	# Arremesso: o corpo acompanha o braço e o cacetete acerta o outro jogador.
+	_ready_for_client.rpc("stand_baton")
+	await wait_until(func() -> bool: return remote.net_position.distance_to(Vector3(0.0, 0.0, -1.5)) < 0.5)
+	await pause(1.6)
+	await place(me, Vector3(0.0, 0.1, 2.0))
+	var remote_health := remote.health
+	loadout.use_secondary()
+	check("arremesso puxa o jogador para a frente", me.velocity.z < -2.0)
+	check("cacetete sai do inventário", not loadout.has_baton and loadout.equipped == ItemDef.Kind.NONE)
+	var baton := active_item(ItemDef.Kind.BATON)
+	check("cacetete em voo", baton != null)
+	check("cacetete fere outro jogador", await wait_until(func() -> bool: return remote.health < remote_health, 2.0))
+	check("cacetete derruba quem acerta", await wait_until(func() -> bool: return remote.net_knocked, 2.0))
+	if baton:
+		check("cacetete para e pode ser pego", await wait_until(func() -> bool: return baton.can_take(), 10.0))
+		baton.queue_free()
+
+	# Rebote: passado o intervalo de imunidade, o cacetete também machuca quem o jogou.
+	await pause(1.5)
+	await place(me, Vector3(3.0, 0.1, 3.0))
+	var my_health := me.health
+	main.spawn_item(def_item("baton"), Vector3(3.0, 1.3, -0.5), Vector3(0.0, 1.0, 10.0), true, 1, 1)
+	check("rebote fere quem jogou", await wait_until(func() -> bool: return me.health < my_health, 2.0))
+	for item: WorldItem in main.items.get_children():
+		item.queue_free()
+	await pause(0.1)
+
+	# Granada: empurra aliados, inimigos, loot e itens, sem causar dano direto.
+	await pause(1.5)
+	await place(me, Vector3(0.0, 0.1, 2.0))
+	await spawn_and_take(me, "grenade")
+	check("granada equipada", loadout.equipped == ItemDef.Kind.GRENADE)
+	loadout.use_primary()
+	check("granada sai da mão", loadout.grenades == 0 and loadout.equipped == ItemDef.Kind.NONE)
+	var thrown := active_item(ItemDef.Kind.GRENADE)
+	check("pino puxado", thrown != null and not thrown.can_take())
+	thrown.queue_free()
+	await pause(0.1)
+
+	var blast_center := Vector3(0.0, 0.5, 0.0)
+	monster.set_physics_process(true)
+	monster.global_position = Vector3(2.5, 0.1, 0.0)
+	_ready_for_client.rpc("stand_blast")
+	await wait_until(func() -> bool: return remote.net_position.distance_to(Vector3(-2.5, 0.0, 0.0)) < 0.5)
+	# O jogador sai antes de a caixa chegar: corpos sobrepostos lançam a caixa longe.
+	await place(me, Vector3(0.0, 0.1, -2.5))
+	crate.global_position = Vector3(0.0, 0.5, 1.5)
+	crate.linear_velocity = Vector3.ZERO
+	crate.angular_velocity = Vector3.ZERO
+	await pause(0.3)
+	var floor_item := main.spawn_item(def_item("ammo"), Vector3(0.0, 0.3, -1.0))
+	await pause(0.1)
+	var armed := main.spawn_item(def_item("grenade"), blast_center, Vector3.ZERO, true, 1, 0)
+	armed.set("_timer", 0.05)
+	var monster_x := monster.global_position.x
+	var crate_z := crate.global_position.z
+	var floor_item_z := floor_item.global_position.z
+	var me_z := me.global_position.z
+	var remote_x := remote.net_position.x
+	var healths := [me.health, remote.health, monster.health]
+	await pause(0.5)
+	check("granada some ao explodir", not is_instance_valid(armed))
+	check("empurra monstro (x=%.1f)" % monster.global_position.x, monster.global_position.x > monster_x + 1.0)
+	check("empurra host (z=%.1f)" % me.global_position.z, me.global_position.z < me_z - 1.0)
+	check("empurra cliente (x=%.1f)" % remote.net_position.x, await wait_until(func() -> bool: return remote.net_position.x < remote_x - 1.0, 2.0))
+	check("empurra loot (z=%.1f)" % crate.global_position.z, crate.global_position.z > crate_z + 0.5)
+	check("empurra item", floor_item.global_position.z < floor_item_z - 0.5)
+	check("granada não fere direto", monster.health == healths[2])
+	check("derruba quem é repelido", me.net_knocked)
+	monster.global_position = Vector3(0.0, 0.0, -60.0)
+	monster.set_physics_process(false)
+	await pause(0.5)
+	for item: WorldItem in main.items.get_children():
+		item.queue_free()
+	await pause(0.1)
+
+	# Cliente: fluxo completo pela rede, com o servidor decidindo munição.
+	main.spawn_item(def_item("ammo"), Vector3(3.0, 0.3, 2.0))
+	main.spawn_item(def_item("revolver"), Vector3(3.8, 0.3, 2.0))
+	_ready_for_client.rpc("client_arm")
+	var armed_up := func() -> bool: return remote.loadout.has_revolver and remote.loadout.reserve == 5
+	check("servidor entrega itens ao cliente", await wait_until(armed_up))
+	check("cliente disparou no servidor", await wait_until(func() -> bool: return remote.loadout.loaded == remote.loadout.cylinder_size - 1))
+	check("host vê a arma na mão do cliente", await wait_until(func() -> bool: return remote.loadout.net_equipped == ItemDef.Kind.REVOLVER))
+
+	# Morrer solta o que carrega no chão.
+	_ready_for_client.rpc("client_done")
+	await pause(0.3)
+	var count := main.items.get_child_count()
+	remote.server_hit(999, Vector3.ZERO)
+	check("morto deixa os itens no chão", main.items.get_child_count() >= count + 2)
+	check("morto fica sem itens", not remote.loadout.has_revolver and remote.loadout.reserve == 0)
+
+
+func test_weapons_client(me: Player) -> void:
+	await _wait_command("stand_baton")
+	me.global_position = Vector3(0.0, 0.1, -1.5)
+	me.velocity = Vector3.ZERO
+	await _wait_command("stand_blast")
+	me.global_position = Vector3(-2.5, 0.1, 0.0)
+	me.velocity = Vector3.ZERO
+	await _wait_command("client_arm")
+	me.global_position = Vector3(3.0, 0.1, 2.0)
+	me.velocity = Vector3.ZERO
+	await pause(1.6)
+	var ground := func() -> Array: return main.items.get_children().filter(func(i: WorldItem) -> bool: return i.def.kind == ItemDef.Kind.AMMO)
+	check("cliente vê item no chão", await wait_until(func() -> bool: return not ground.call().is_empty()))
+	var ammo: WorldItem = ground.call()[0]
+	check("item congelado no cliente", ammo.freeze)
+	me.global_position = ammo.net_position + Vector3(0.0, 0.0, 1.0)
+	await pause(0.1)
+	me.loadout.try_take(ammo)
+	check("cliente recebe munição", await wait_until(func() -> bool: return me.loadout.reserve == 5))
+	var revolver := func() -> Array: return main.items.get_children().filter(func(i: WorldItem) -> bool: return i.def.kind == ItemDef.Kind.REVOLVER)
+	check("cliente vê revólver", await wait_until(func() -> bool: return not revolver.call().is_empty()))
+	me.global_position = revolver.call()[0].net_position + Vector3(0.0, 0.0, 1.0)
+	await pause(0.1)
+	me.loadout.try_take(revolver.call()[0])
+	check("cliente equipa revólver", await wait_until(func() -> bool: return me.loadout.equipped == ItemDef.Kind.REVOLVER))
+	me.rotation.y = PI
+	me.head.rotation.x = 0.0
+	await pause(1.0)
+	var before := me.velocity
+	me.loadout.use_primary()
+	check("recuo no cliente é imediato", me.velocity.distance_to(before) > 1.5)
+	await _wait_command("client_done")
 
 
 func run_client() -> void:
@@ -203,10 +454,13 @@ func run_client() -> void:
 	for i in 5:
 		me.send_voice(VoiceCodec.encode(samples))
 		await pause(0.04)
+	await test_weapons_client(me)
 
 	check("cliente volta ao lobby", await wait_until(func() -> bool: return Game.phase == Game.Phase.LOBBY, 15.0))
 	check("cliente revivido", await wait_until(func() -> bool: return me.alive and me.health == 100))
 	check("cliente sem props", await wait_until(func() -> bool: return main.props.get_child_count() == 0))
+	check("cliente sem itens", await wait_until(func() -> bool: return main.items.get_child_count() == 0))
+	check("cliente sem armas", await wait_until(func() -> bool: return not me.loadout.has_revolver and me.loadout.equipped == ItemDef.Kind.NONE))
 	check("nível limpo", main.level.layout_signature.is_empty())
 
 	await _wait_command("leave")
