@@ -1,3 +1,10 @@
-# Godot 4+ specific ignores
 .godot/
 /android/
+*.translation
+export.cfg
+export_credentials.cfg
+
+# Export
+export.cfg
+export_credentials.cfg
+*.translation

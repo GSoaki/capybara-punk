@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PropDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/props/prop_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Rack de servidor"
+size = Vector3(0.9,1.6,0.9)
+color = Color(0.25,0.27,0.32, 1)
+mass = 55.0
+min_value = 180
+max_value = 320
+impact_threshold = 8.0
+fragility = 0.05
+spawn_weight = 0.8

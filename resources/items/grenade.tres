@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/items/item_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+kind = 3
+display_name = "Granada de impacto"
+size = Vector3(0.14,0.14,0.14)
+color = Color(0.3,0.95,0.85, 1)
+mass = 0.6
+amount = 1
+bounce = 0.35
+spawn_weight = 1.0

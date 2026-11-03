@@ -1,0 +1,81 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/drone.gd" id="1"]
+
+[sub_resource type="SphereShape3D" id="shape"]
+radius = 0.35
+
+[sub_resource type="BoxMesh" id="body"]
+size = Vector3(0.5, 0.16, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="body_mat"]
+albedo_color = Color(0.42, 0.45, 0.5, 1)
+metallic = 0.2
+roughness = 0.5
+emission_enabled = true
+emission = Color(0.42, 0.45, 0.5, 1)
+emission_energy_multiplier = 0.25
+
+[sub_resource type="BoxMesh" id="eye"]
+size = Vector3(0.16, 0.06, 0.04)
+
+[sub_resource type="StandardMaterial3D" id="eye_mat"]
+emission_enabled = true
+emission = Color(1, 0.75, 0.15, 1)
+emission_energy_multiplier = 5.0
+
+[sub_resource type="BoxMesh" id="rotor"]
+size = Vector3(0.75, 0.015, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="rotor_mat"]
+albedo_color = Color(0.5, 0.52, 0.56, 1)
+
+[sub_resource type="SceneReplicationConfig" id="replication"]
+properties/0/path = NodePath(".:net_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:net_yaw")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+
+[node name="Drone" type="CharacterBody3D"]
+collision_layer = 16
+collision_mask = 1
+motion_mode = 1
+script = ExtResource("1")
+
+[node name="Collider" type="CollisionShape3D" parent="."]
+shape = SubResource("shape")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("body")
+surface_material_override/0 = SubResource("body_mat")
+
+[node name="Eye" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.26)
+mesh = SubResource("eye")
+surface_material_override/0 = SubResource("eye_mat")
+
+[node name="Rotors" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0)
+
+[node name="RotorA" type="MeshInstance3D" parent="Rotors"]
+mesh = SubResource("rotor")
+surface_material_override/0 = SubResource("rotor_mat")
+
+[node name="RotorB" type="MeshInstance3D" parent="Rotors"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("rotor")
+surface_material_override/0 = SubResource("rotor_mat")
+
+[node name="Searchlight" type="SpotLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, 0.866, 0, -0.866, 0.5, 0, -0.1, -0.2)
+light_color = Color(1, 0.8, 0.4, 1)
+light_energy = 10.0
+spot_range = 9.0
+spot_angle = 38.0
+spot_attenuation = 0.6
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_interval = 0.05
+replication_config = SubResource("replication")
