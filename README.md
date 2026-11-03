@@ -8,7 +8,11 @@
 **Perspectiva:** Primeira pessoa  
 **Modelo de jogo:** Sessões cooperativas com missões independentes e progressão persistente.
 
-Documentação técnica do projeto (como rodar, arquitetura e testes): [docs/desenvolvimento.md](docs/desenvolvimento.md).
+Documentação técnica e guia AI-First do projeto:
+- **Guia para Agentes de IA (Context Engineering):** [AGENTS.md](AGENTS.md)
+- **Como rodar, controles e mecânicas implementadas:** [docs/desenvolvimento.md](docs/desenvolvimento.md)
+- **Arquitetura dos subsistemas e diagramas de fluxo:** [docs/arquitetura.md](docs/arquitetura.md)
+- **Catálogo completo arquivo por arquivo:** [docs/catalogo-arquivos.md](docs/catalogo-arquivos.md)
 
 ---
 # 1. High Concept

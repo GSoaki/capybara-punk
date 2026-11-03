@@ -818,6 +818,7 @@ func server_attach_part_from_prop(prop: Prop, explicit_slot: int = -1) -> bool:
 	return true
 
 
+## Cliente -> Servidor: solicita destacar um membro (de si mesmo ou de aliado a até BODY_INTERACT_RANGE).
 @rpc("any_peer", "call_local", "reliable")
 func request_detach_part(slot: int) -> void:
 	if not multiplayer.is_server():
@@ -832,6 +833,7 @@ func request_detach_part(slot: int) -> void:
 	server_detach_part(slot as BodyPartDef.Slot)
 
 
+## Cliente -> Servidor: solicita consumir um Prop de membro do mundo e instalá-lo neste jogador.
 @rpc("any_peer", "call_local", "reliable")
 func request_attach_part_from_prop(prop_path: NodePath) -> void:
 	if not multiplayer.is_server():
@@ -847,6 +849,7 @@ func request_attach_part_from_prop(prop_path: NodePath) -> void:
 	server_attach_part_from_prop(prop)
 
 
+## Servidor -> Todos os peers: sincroniza o dicionário de membros instalados e atualiza malhas/rig.
 @rpc("any_peer", "call_local", "reliable")
 func _sync_body_parts(new_parts: Dictionary) -> void:
 	if Net.sender_id() != 1:
@@ -892,6 +895,7 @@ func server_revive(spawn_position: Vector3) -> void:
 	_revive.rpc(spawn_position)
 
 
+## Servidor -> Todos os peers: replica vida atual e transição de morte.
 @rpc("any_peer", "call_local", "reliable")
 func _sync_vitals(new_health: int, is_alive: bool) -> void:
 	if Net.sender_id() != 1:
@@ -901,6 +905,7 @@ func _sync_vitals(new_health: int, is_alive: bool) -> void:
 		_set_alive(false)
 
 
+## Servidor -> Cliente dono: aplica velocidade de knockback e inicia stagger ou ragdoll.
 @rpc("any_peer", "call_local", "reliable")
 func _receive_knock(knock: Vector3, stun: float) -> void:
 	if Net.sender_id() != 1:
@@ -917,6 +922,7 @@ func _receive_knock(knock: Vector3, stun: float) -> void:
 		rig.start_ragdoll(self, knock)
 
 
+## Servidor -> Todos os peers: restaura vida, fôlego, postura e posição no início/fim de run.
 @rpc("any_peer", "call_local", "reliable")
 func _revive(spawn_position: Vector3) -> void:
 	if Net.sender_id() != 1:
