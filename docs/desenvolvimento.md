@@ -1,6 +1,12 @@
 # Friendslop Template para Godot 4.7
 
-Template de co-op 3D em primeira pessoa para Godot 4.7.2, sem assets externos e sem dependências nativas. A geometria é greybox e o projeto é GDScript puro. O loop é o do gênero: até 8 amigos entram numa instalação gerada por seed, carregam loot com física até o van, fogem de um monstro que escuta a voz deles e tentam bater uma quota crescente.
+Template de co-op 3D em primeira pessoa para Godot 4.7.2, sem assets externos e sem dependências nativas. A geometria é greybox e o projeto é GDScript puro. O loop é o do gênero: até 8 amigos entram numa instalação gerada por seed, carregam loot com física até o van, realizam cirurgias e implantes corporais em campo, fogem de um monstro que escuta a voz deles e tentam bater uma quota crescente.
+
+> **Índice da Documentação:**
+> - [`../AGENTS.md`](../AGENTS.md) — Guia rápido e invariantes para desenvolvimento com IA (AI-First).
+> - [`arquitetura.md`](arquitetura.md) — Diagramas Mermaid e arquitetura profunda de rede, fases, física, VoIP e rig modular.
+> - [`catalogo-arquivos.md`](catalogo-arquivos.md) — Documentação detalhada arquivo por arquivo (todos os scripts, cenas, resources e testes).
+> - [`../README.md`](../README.md) — Game Design Document (GDD).
 
 ⚠️ **Estado da validação:** no Godot 4.7.2 oficial (macOS), o teste de integração passa nas 168 verificações, sem erro de script. Uma sessão com janela e host único renderizou van, salas, loot, monstro e HUD a 120 FPS, sem travada ao iniciar a run. As armas foram exercitadas com janela por eventos de entrada simulados. Ninguém jogou o template com mouse e teclado reais, e microfone, som e dois jogadores com janela ainda não foram testados.
 
@@ -20,12 +26,12 @@ godot --path . -- --join=127.0.0.1 --name=Bia
 | --- | --- |
 | Mover, pular, correr, agachar | WASD, Espaço, Shift, Ctrl |
 | Agarrar enquanto segura, arremessar (mãos livres) | Botão esquerdo, botão direito |
-| Usar a arma, arremessar cacetete ou granada | Botão esquerdo, botão direito |
-| Pegar item do chão | E |
-| Equipar ou guardar revólver, cacetete, granada | 1, 2, 3 |
-| Recarregar, largar a arma | R, Q |
-| Aproximar ou afastar o objeto | Roda do mouse |
-| Usar alavanca / implantar membro, destacar membro, lanterna | E, G, F |
+| Usar a arma / item equipado, arremessar cacetete ou granada | Botão esquerdo, botão direito |
+| Pegar item do chão / usar alavanca / implantar ou arrancar membro na mira | E |
+| Selecionar ou guardar slot da barra de inventário (5 slots) | 1, 2, 3, 4, 5 |
+| Recarregar revólver, largar item equipado | R, Q |
+| Aproximar ou afastar o objeto segurado | Roda do mouse |
+| Destacar membro (do alvo na mira ou de si mesmo), abrir diagnóstico corporal, lanterna | G, I, F |
 | Alternar câmera (1ª / 3ª pessoa), apertar para falar (opcional), pausa | V, T, Esc |
 
 ## O que vem pronto
@@ -63,10 +69,11 @@ Bater numa parede a mais de 11 m/s depois de ser lançado causa o mesmo dano de 
 ```text
 scripts/autoload/   Settings, Net (sessão), Game (fases e quota), Voice (microfone)
 scripts/net/        VoiceCodec (mu-law), VoiceOutput (buffer de jitter e playback 3D)
-scripts/player/     Player, Loadout (inventário e armas)
+scripts/player/     Player, Loadout (5 slots e armas), PlayerRig (Skeleton3D e ragdoll), BodyPartDef
 scripts/props/      Prop, PropDef
 scripts/items/      ItemDef, WorldItem (item no chão, cacetete em voo, granada), WeaponFx
 scripts/world/      LevelGenerator, Monster, Drone, Lever, ExtractionZone
+scripts/ui/         HUD (barra de 5 slots, diagnóstico corporal [I], painel de carga), MainMenu, PauseMenu
 scripts/main.gd     Spawners e reação às fases
 tests/              Teste de integração com dois processos
 ```
@@ -85,7 +92,7 @@ Toda a sessão acontece numa cena única, `scenes/main.tscn`, porque trocar de c
 
 **ENet sem NAT traversal.** Com ENet, o host precisa abrir a porta 24565 UDP ou usar uma VPN de camada 2. Isso inviabiliza um lançamento real, em que amigos esperam entrar por convite. Para isso, integre o GodotSteam (confira a compatibilidade com o 4.7) e altere apenas `_create_host_peer` e `_create_client_peer` em `net.gd`.
 
-**Derrubada sem ragdoll real.** Sem esqueleto no greybox, a derrubada inclina a cápsula e aplica o empurrão. Ao adicionar um personagem com `Skeleton3D`, use `PhysicalBoneSimulator3D` em `_receive_knock`.
+**Rig esquelética procedural e ragdoll modular.** `PlayerRig` monta em tempo de execução um `Skeleton3D` de 6 ossos (`Torso`, `Head`, `LeftArm`, `RightArm`, `LeftLeg`, `RightLeg`) animado por molas de inércia e equipado com `PhysicalBoneSimulator3D`. Ao sofrer derrubada (`stun >= 0.5 s`) ou morrer, o ragdoll físico é ativado apenas para os membros atualmente instalados no corpo.
 
 ## Como estender
 

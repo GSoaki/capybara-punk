@@ -605,6 +605,7 @@ func _strike(target: Object, direction: Vector3, damage: int, knock: float, stun
 		target.server_hit(damage, direction * knock + Vector3.UP, stun)
 
 
+## Cliente dono -> Servidor: solicita coletar um WorldItem do chão para um slot livre.
 @rpc("any_peer", "call_local", "reliable")
 func _request_take(item_name: String) -> void:
 	if not _is_valid_request():
@@ -617,6 +618,7 @@ func _request_take(item_name: String) -> void:
 		item.queue_free()
 
 
+## Cliente dono -> Servidor: valida munição e cadência e dispara raycast hitscan do revólver.
 @rpc("any_peer", "call_local", "reliable")
 func _request_fire(direction: Vector3, slot_idx: int = -1) -> void:
 	var now := Time.get_ticks_msec()
@@ -642,6 +644,7 @@ func _request_fire(direction: Vector3, slot_idx: int = -1) -> void:
 	(get_tree().current_scene as Main).weapon_fx.shot.rpc(from + aim * 0.5, end, hit_entity)
 
 
+## Cliente dono -> Servidor: inicia o timer de recarga do revólver consumindo balas dos slots AMMO ao concluir.
 @rpc("any_peer", "call_local", "reliable")
 func _request_reload(slot_idx: int = -1) -> void:
 	var rev_idx := slot_idx if (slot_idx >= 0 and slot_idx < SLOT_COUNT and slot_kinds[slot_idx] == ItemDef.Kind.REVOLVER) else _revolver_slot()
@@ -652,6 +655,7 @@ func _request_reload(slot_idx: int = -1) -> void:
 		_push_state()
 
 
+## Cliente dono -> Servidor: executa golpe corpo a corpo com o cacetete usando SphereShape3D + checagem de visada.
 @rpc("any_peer", "call_local", "reliable")
 func _request_melee(direction: Vector3) -> void:
 	var now := Time.get_ticks_msec()
@@ -685,6 +689,7 @@ func _request_melee(direction: Vector3) -> void:
 		Game.emit_noise(from, 0.1)
 
 
+## Cliente dono -> Servidor: consome o slot e instancia cacetete ou granada como projétil ativo (net_active = true).
 @rpc("any_peer", "call_local", "reliable")
 func _request_throw(slot_idx: int, direction: Vector3) -> void:
 	if not _is_valid_use() or not direction.is_finite() or direction.is_zero_approx():
@@ -707,6 +712,7 @@ func _request_throw(slot_idx: int, direction: Vector3) -> void:
 	_push_state()
 
 
+## Cliente dono -> Servidor: larga o item do slot no chão como WorldItem inativo (net_active = false).
 @rpc("any_peer", "call_local", "reliable")
 func _request_drop(slot_idx: int, toss: Vector3) -> void:
 	if not _is_valid_request() or not toss.is_finite():
@@ -745,6 +751,7 @@ func _request_drop(slot_idx: int, toss: Vector3) -> void:
 # --- Respostas do servidor e efeitos remotos ---
 
 
+## Servidor -> Cliente dono: sincroniza tipos, quantidades e estado de recarga dos 5 slots.
 @rpc("any_peer", "call_local", "reliable")
 func _sync_state(p_kinds: Array, p_amounts: Array, p_reloading: bool) -> void:
 	if Net.sender_id() != 1:
