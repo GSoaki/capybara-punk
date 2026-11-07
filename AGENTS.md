@@ -9,8 +9,8 @@ Este arquivo é o ponto de entrada universal para qualquer agente de IA (Claude 
 - **Projeto**: Capybara Punk (Cyberpunk Friendslop) — jogo co-op 3D em primeira/terceira pessoa (1–8 jogadores) de infiltração, coleta de loot físico, cirurgia corporal modular e extração.
 - **Engine**: Godot `4.7` (`config_version=5`, Forward Plus, driver `d3d12` no Windows).
 - **Motor de Física**: `Jolt Physics` 3D (gravidade padrão `9.8 m/s²`).
-- **Linguagem**: GDScript 2.0 puro e estaticamente tipado (`:=`, tipos explícitos em parâmetros e retornos). Zero dependências nativas (GDExtension) e zero assets 3D externos (toda geometria e malhas são greybox procedurais via `CSGBox3D`, `BoxMesh`, `SphereMesh`).
-- **Rede / VoIP**: `ENetMultiplayerPeer` (porta UDP `24565`) + VoIP espacial 3D em Mu-law 8-bit a `16 kHz` (`16 kB/s` por locutor no canal 1 `unreliable_ordered`).
+- **Linguagem**: GDScript 2.0 puro e estaticamente tipado (`:=`, tipos explícitos em parâmetros e retornos). Zero assets 3D externos (toda geometria e malhas são greybox procedurais via `CSGBox3D`, `BoxMesh`, `SphereMesh`).
+- **Rede / VoIP**: Dual-Backend em `Net` (`scripts/autoload/net.gd`): **Epic Online Services (`EOSGMultiplayerPeer` + `HLobbies`)** para sessões online via código de sala de 6 caracteres com NAT traversal/TURN Relay, e **`ENetMultiplayerPeer`** (porta UDP `24565`) para LAN e testes headless + VoIP espacial 3D em Mu-law 8-bit a `16 kHz` (`16 kB/s` por locutor no canal 1 `unreliable_ordered`).
 
 ---
 
