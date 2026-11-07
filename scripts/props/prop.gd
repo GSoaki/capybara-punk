@@ -135,6 +135,7 @@ func _on_body_entered(_body: Node) -> void:
 		queue_free()
 
 
+## Cliente -> Servidor: tenta registrar o jogador como um dos holders deste Prop.
 @rpc("any_peer", "call_local", "reliable")
 func request_grab() -> void:
 	if not multiplayer.is_server():
@@ -149,6 +150,7 @@ func request_grab() -> void:
 		player.grab_lost.rpc_id(id)
 
 
+## Cliente -> Servidor: solta o Prop e, se throw for verdadeiro, aplica impulso na direção da mira.
 @rpc("any_peer", "call_local", "reliable")
 func request_release(throw: bool) -> void:
 	if not multiplayer.is_server():
@@ -161,6 +163,7 @@ func request_release(throw: bool) -> void:
 		apply_central_impulse(player.get_aim_direction() * THROW_IMPULSE * throw_scale * minf(mass, 15.0))
 
 
+## Cliente -> Servidor: aplica empurrão leve quando o jogador esbarra no Prop caminhando.
 @rpc("any_peer", "call_local", "unreliable")
 func request_push(impulse: Vector3) -> void:
 	if multiplayer.is_server():
@@ -168,6 +171,7 @@ func request_push(impulse: Vector3) -> void:
 		apply_central_impulse(impulse.limit_length(MAX_PUSH_IMPULSE))
 
 
+## Servidor -> Todos os peers: exibe texto flutuante (-$X) quando um impacto reduz o valor do Prop.
 @rpc("authority", "call_local", "reliable")
 func _show_loss(amount: int) -> void:
 	if DisplayServer.get_name() == "headless":

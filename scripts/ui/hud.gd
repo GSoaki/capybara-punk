@@ -1,4 +1,7 @@
 extends Control
+## HUD principal da sessão. Constrói dinamicamente os 5 slots da barra de inventário (%HudBar),
+## o modal anatômico de diagnóstico corporal (%BodyHudModal, tecla [I]) e o painel cooperativo
+## de carga (%CarryPanel), além de atualizar barras vitais, objetivo e estado de voz.
 
 const CARRY_OK := Color("76b041")
 const CARRY_NEEDS_HELP := Color("f2c14e")

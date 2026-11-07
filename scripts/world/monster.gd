@@ -388,6 +388,7 @@ func server_attach_part_from_prop(prop: Prop, explicit_slot: int = -1) -> bool:
 	return true
 
 
+## Cliente -> Servidor: solicita destacar um membro do monstro a até BODY_INTERACT_RANGE.
 @rpc("any_peer", "call_local", "reliable")
 func request_detach_part(slot: int) -> void:
 	if not multiplayer.is_server():
@@ -402,6 +403,7 @@ func request_detach_part(slot: int) -> void:
 	server_detach_part(slot as BodyPartDef.Slot)
 
 
+## Cliente -> Servidor: solicita instalar um Prop de membro do mundo neste monstro.
 @rpc("any_peer", "call_local", "reliable")
 func request_attach_part_from_prop(prop_path: NodePath) -> void:
 	if not multiplayer.is_server():
@@ -417,6 +419,7 @@ func request_attach_part_from_prop(prop_path: NodePath) -> void:
 	server_attach_part_from_prop(prop)
 
 
+## Servidor -> Todos os peers: sincroniza os membros instalados no monstro e atualiza malhas/rig.
 @rpc("any_peer", "call_local", "reliable")
 func _sync_body_parts(new_parts: Dictionary) -> void:
 	if Net.sender_id() != 1:

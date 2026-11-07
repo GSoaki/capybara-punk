@@ -1,4 +1,6 @@
 extends Control
+## Menu principal exibido fora de sessão. Lê/salva nome e endereço em Settings, permite
+## alternar a opção de desativar inimigos e inicia conexões ENet como host ou cliente.
 
 @onready var name_edit: LineEdit = %NameEdit
 @onready var address_edit: LineEdit = %AddressEdit

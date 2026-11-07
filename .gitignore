@@ -8,3 +8,7 @@ export_credentials.cfg
 export.cfg
 export_credentials.cfg
 *.translation
+
+# Credenciais locais (EOS / Multiplayer)
+eos_credentials.cfg
+.env

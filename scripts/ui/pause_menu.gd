@@ -1,4 +1,6 @@
 extends Control
+## Menu de pausa em sessão (tecla Esc). Ajusta sensibilidade do mouse, captura de microfone,
+## modo Push-to-Talk, ativação de inimigos em tempo real e saída da partida.
 
 
 func _ready() -> void:
