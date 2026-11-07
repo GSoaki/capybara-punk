@@ -90,7 +90,24 @@ Toda a sessão acontece numa cena única, `scenes/main.tscn`, porque trocar de c
 
 **Voz em mu-law, sem Opus.** Dá 16 kB/s por pessoa falando, no upload do cliente e por ouvinte no upload do host. Com 8 jogadores e 3 clientes falando ao mesmo tempo, o host retransmite 18 fluxos, cerca de 288 kB/s só de voz. Funciona em conexões domésticas boas e dispensa extensão nativa. Para produção, troque `encode` e `decode` em `VoiceCodec` por Opus, que costuma reduzir a banda em cerca de 5 vezes.
 
-**ENet sem NAT traversal.** Com ENet, o host precisa abrir a porta 24565 UDP ou usar uma VPN de camada 2. Isso inviabiliza um lançamento real, em que amigos esperam entrar por convite. Para isso, integre o GodotSteam (confira a compatibilidade com o 4.7) e altere apenas `_create_host_peer` e `_create_client_peer` em `net.gd`.
+**ENet sem NAT traversal.** Com ENet, o host precisa abrir a porta 24565 UDP ou usar uma VPN de camada 2. Isso inviabiliza um lançamento real, em que amigos esperam entrar por convite ou código de sala. Para internet pública sem abrir portas (atravessando CGNAT via relay gratuito), integre o **Epic Online Services (EOSG)** ou **GodotSteam** mantendo o modo Listen Server (`peer_id = 1`) sobre transporte P2P.
+
+## Boas práticas com Epic Online Services (EOS) em equipe
+
+1. **Organização compartilhada (sem dividir senha):** no [Epic Developer Portal](https://dev.epicgames.com/portal), crie uma **Organization** para o estúdio e convide a conta Epic individual de cada desenvolvedor em `Organization > Members`.
+2. **Credenciais fora do Git (`eos_credentials.cfg`):** nunca salve `client_secret` e demais IDs diretamente no código versionado. Use um arquivo `eos_credentials.cfg` na raiz do projeto (listado no `.gitignore`) e mantenha no repositório apenas um modelo `eos_credentials.example.cfg`:
+   ```ini
+   [eos]
+   product_name="Capybara Punk"
+   product_version="0.1.0"
+   product_id=""
+   sandbox_id=""
+   deployment_id=""
+   client_id=""
+   client_secret=""
+   ```
+3. **Permissão mínima e login invisível:** use uma *Client Policy* do tipo **`Peer2Peer`** e ative o Identity Provider **`DeviceID`** para que os jogadores entrem por código de sala sem precisar de login na Epic.
+4. **Fallback para ENet em testes/CI:** se `eos_credentials.cfg` estiver ausente ou o jogo rodar em `--headless` (`tests/run_smoke.sh`), a rede deve cair automaticamente para `ENetMultiplayerPeer` local.
 
 **Rig esquelética procedural e ragdoll modular.** `PlayerRig` monta em tempo de execução um `Skeleton3D` de 6 ossos (`Torso`, `Head`, `LeftArm`, `RightArm`, `LeftLeg`, `RightLeg`) animado por molas de inércia e equipado com `PhysicalBoneSimulator3D`. Ao sofrer derrubada (`stun >= 0.5 s`) ou morrer, o ragdoll físico é ativado apenas para os membros atualmente instalados no corpo.
 

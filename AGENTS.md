@@ -105,3 +105,18 @@ capybara-punk/
     ```bash
     bash tests/run_smoke.sh /caminho/para/godot
     ```
+
+---
+
+## 6. Boas Práticas de Credenciais e Multiplayer Online (Epic Online Services - EOS)
+
+- **Gestão de Equipe no Epic Developer Portal**:
+  - Nunca compartilhe uma única conta pessoal da Epic Games entre os desenvolvedores. Utilize uma **Organization** no [Epic Developer Portal](https://dev.epicgames.com/portal) e convide cada desenvolvedor com seu próprio e-mail em **Organization > Members** (cargos *Admin* ou *Developer*).
+- **Segurança de Chaves e Segredos (`eos_credentials.cfg`)**:
+  - As 5 chaves do SDK (`product_id`, `sandbox_id`, `deployment_id`, `client_id` e `client_secret`) **NUNCA** devem ser commitadas diretamente em scripts `.gd` ou cenas `.tscn` versionadas no Git.
+  - Mantenha as credenciais reais em `res://eos_credentials.cfg` (ignorado no `.gitignore`) e versione apenas o template `res://eos_credentials.example.cfg` com valores vazios.
+  - Compartilhe o arquivo `eos_credentials.cfg` preenchido de forma privada entre os membros da equipe.
+- **Política de Cliente e Login sem Fricção**:
+  - Configure a *Client Policy* no portal como **`Peer2Peer`** (restringindo permissões ao escopo de Lobbies e NAT Relay P2P) e habilite o provedor de identidade **`DeviceID`** (*Connect Interface*) para login invisível sem exigir conta Epic dos jogadores.
+- **Fallback Automático para CI e Modo Headless**:
+  - Caso `eos_credentials.cfg` não exista ou o motor esteja executando em `--headless` (como no GitHub Actions ou em `tests/run_smoke.sh`), o subsistema de rede (`Net`) deve operar automaticamente com `ENetMultiplayerPeer` local, garantindo que testes automatizados rodem offline sem depender de credenciais externas.
