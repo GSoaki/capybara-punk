@@ -16,7 +16,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 
 [node name="Panel" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(380, 0)
+custom_minimum_size = Vector2(400, 0)
 layout_mode = 2
 
 [node name="Margin" type="MarginContainer" parent="Center/Panel"]
@@ -33,7 +33,14 @@ theme_override_constants/separation = 10
 [node name="Title" type="Label" parent="Center/Panel/Margin/Box"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 30
-text = "Friendslop Template"
+text = "Capybara Punk"
+horizontal_alignment = 1
+
+[node name="EosStatus" type="Label" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Inicializando rede..."
 horizontal_alignment = 1
 
 [node name="NameLabel" type="Label" parent="Center/Panel/Margin/Box"]
@@ -45,13 +52,20 @@ unique_name_in_owner = true
 layout_mode = 2
 max_length = 24
 
-[node name="AddressLabel" type="Label" parent="Center/Panel/Margin/Box"]
+[node name="UseLan" type="CheckBox" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
 layout_mode = 2
-text = "Endereço do host"
+text = "Modo Local / LAN (IP direto sem internet)"
+
+[node name="AddressLabel" type="Label" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Código da sala (para entrar)"
 
 [node name="AddressEdit" type="LineEdit" parent="Center/Panel/Margin/Box"]
 unique_name_in_owner = true
 layout_mode = 2
+placeholder_text = "Ex: A4K9P2"
 
 [node name="DisableEnemies" type="CheckBox" parent="Center/Panel/Margin/Box"]
 unique_name_in_owner = true
@@ -65,13 +79,13 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Hospedar"
+text = "Criar Sala"
 
 [node name="JoinButton" type="Button" parent="Center/Panel/Margin/Box/Buttons"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Entrar"
+text = "Entrar com Código"
 
 [node name="Status" type="Label" parent="Center/Panel/Margin/Box"]
 unique_name_in_owner = true

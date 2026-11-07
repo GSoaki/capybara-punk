@@ -453,7 +453,8 @@ func _objective_text() -> String:
 			var seconds := ceili(Game.time_left)
 			return "Dia %d   $%d / $%d   %d:%02d" % [Game.day, Game.collected, Game.quota, seconds / 60, seconds % 60]
 		Game.Phase.LOBBY:
-			return "Dia %d   Quota $%d   Puxe a alavanca para iniciar" % [Game.day, Game.quota]
+			var code_suffix := "   |   Sala: %s" % Net.room_code if not Net.room_code.is_empty() else ""
+			return "Dia %d   Quota $%d%s   |   Puxe a alavanca para iniciar" % [Game.day, Game.quota, code_suffix]
 	return ""
 
 

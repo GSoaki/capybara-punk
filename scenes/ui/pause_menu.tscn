@@ -24,7 +24,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 
 [node name="Panel" type="PanelContainer" parent="Center"]
-custom_minimum_size = Vector2(340, 0)
+custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 
 [node name="Margin" type="MarginContainer" parent="Center/Panel"]
@@ -37,6 +37,21 @@ theme_override_constants/margin_bottom = 20
 [node name="Box" type="VBoxContainer" parent="Center/Panel/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 10
+
+[node name="RoomCodeRow" type="HBoxContainer" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RoomCodeLabel" type="Label" parent="Center/Panel/Margin/Box/RoomCodeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Sala: ---"
+
+[node name="CopyCode" type="Button" parent="Center/Panel/Margin/Box/RoomCodeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Copiar Código"
 
 [node name="SensitivityLabel" type="Label" parent="Center/Panel/Margin/Box"]
 layout_mode = 2
