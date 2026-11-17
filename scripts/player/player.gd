@@ -24,6 +24,9 @@ const MOUSE_SETTLE_SECONDS := 0.1
 ## Abaixo disto, um golpe só desequilibra, sem derrubar o corpo em ragdoll.
 const RAGDOLL_MIN_STUN := 0.5
 const CARRY_NOTICE_SECONDS := 2.0
+## Canal para trocar cabeça ou tronco; mover-se além da tolerância ou levar dano cancela.
+const VITAL_INSTALL_SECONDS := 2.0
+const VITAL_INSTALL_MOVE_TOLERANCE := 0.5
 
 const DEFAULT_BODY_PARTS: Dictionary = {
 	BodyPartDef.Slot.HEAD: "res://resources/body_parts/organic_head.tres",
@@ -93,6 +96,12 @@ var _spectate_index := 0
 var _spectate_yaw := 0.0
 var _mouse_settle := MOUSE_SETTLE_SECONDS
 var _part_cache: Dictionary = {}
+## Servidor: troca de órgão vital em andamento (prop, slot, tempo restante, origem, vida no início).
+var _vital_install: Dictionary = {}
+## Cliente dono: canal de troca vital exibido no painel de carga.
+var _install_left := 0.0
+var _install_total := 0.0
+var _install_label := ""
 
 @onready var head: Node3D = $Head
 @onready var camera: Camera3D = $Head/Camera3D
@@ -299,17 +308,26 @@ func get_aimed_slot(world_hit_point: Vector3) -> BodyPartDef.Slot:
 ## Retorna o slot mirado se estiver presente, ou o próximo membro removível disponível.
 func get_removable_slot_at(world_hit_point: Vector3) -> int:
 	var aimed := get_aimed_slot(world_hit_point)
-	if has_body_part(aimed):
+	if has_body_part(aimed) and not is_protected_slot(aimed):
 		return aimed
 	return get_next_self_detach_slot()
 
 
-## Ordem segura para remover um membro de si mesmo (braços -> pernas -> cabeça/tronco).
+## Ordem segura para remover um membro de si mesmo (braços -> pernas). Cabeça e tronco só saem por troca.
 func get_next_self_detach_slot() -> int:
 	for slot: BodyPartDef.Slot in DETACH_PRIORITY:
-		if has_body_part(slot):
+		if has_body_part(slot) and not is_protected_slot(slot):
 			return slot
 	return -1
+
+
+static func is_vital_slot(slot: BodyPartDef.Slot) -> bool:
+	return slot == BodyPartDef.Slot.HEAD or slot == BodyPartDef.Slot.TORSO
+
+
+## Cabeça e tronco de jogador vivo não podem ser arrancados, nem por ele nem por aliados.
+func is_protected_slot(slot: BodyPartDef.Slot) -> bool:
+	return alive and is_vital_slot(slot)
 
 
 func _refresh_identity() -> void:
