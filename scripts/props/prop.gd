@@ -225,6 +225,12 @@ func _on_body_entered(_body: Node) -> void:
 	_impact_cooldown = 0.3
 	Game.emit_noise(global_position, _prev_speed * 0.02)
 	var loss := ceili((_prev_speed - def.impact_threshold) * def.fragility * _original_value)
+	## Estabilizador da Mão de Mula: metade da perda por impacto.
+	for holder in holders.values():
+		var hp := holder as Player
+		if is_instance_valid(hp) and hp.implants != null and hp.implants.has_ability(&"mule_overload"):
+			loss = ceili(loss * 0.5)
+			break
 	if loss <= 0:
 		return
 	net_value -= loss
