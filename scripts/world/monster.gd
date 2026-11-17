@@ -36,7 +36,7 @@ const DETACH_PRIORITY: Array[BodyPartDef.Slot] = [
 @export var chase_speed := 5.2
 @export var vision_range := 14.0
 @export var hearing_gain := 180.0
-@export var max_hearing_range := 28.0
+@export var max_hearing_range := 45.0 # espelha Game.MAX_HEARING_RANGE
 @export var attack_range := 1.7
 @export var attack_damage := 34
 @export var attack_cooldown := 1.5
@@ -433,7 +433,7 @@ func _sync_body_parts(new_parts: Dictionary) -> void:
 
 
 ## Servidor. Mesma assinatura de Player.server_hit, para as armas tratarem os dois igual.
-func server_hit(damage: int, knock: Vector3, stun := 1.5) -> void:
+func server_hit(damage: int, knock: Vector3, stun := 1.5, _source: Game.HitSource = Game.HitSource.GENERIC) -> void:
 	if not multiplayer.is_server() or health <= 0:
 		return
 	health = maxi(health - damage, 0)
@@ -475,7 +475,7 @@ func _try_attack() -> void:
 		if player.alive and global_position.distance_to(player.global_position) <= attack_range:
 			_attack_timer = attack_cooldown
 			var away := (player.global_position - global_position).normalized()
-			player.server_hit(dmg, away * knock_force + Vector3.UP * 3.0)
+			player.server_hit(dmg, away * knock_force + Vector3.UP * 3.0, 1.5, Game.HitSource.MONSTER)
 			return
 
 
