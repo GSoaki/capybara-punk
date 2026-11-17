@@ -542,6 +542,11 @@ func _process(delta: float) -> void:
 	_carry_notice_timer -= delta
 	if _carry_notice_timer <= 0.0:
 		carry_notice = ""
+	if _install_left > 0.0:
+		_install_left = maxf(_install_left - delta, 0.0)
+		var progress := 1.0 - _install_left / maxf(_install_total, 0.01)
+		carry_notice = "Instalando %s... %d%% (fique parado)" % [_install_label, roundi(progress * 100.0)]
+		_carry_notice_timer = 0.1
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_mouse_settle = maxf(_mouse_settle - delta, 0.0)
 	else:
@@ -566,6 +571,8 @@ func _physics_process(delta: float) -> void:
 		_local_physics(delta)
 	else:
 		_remote_physics(delta)
+	if multiplayer.is_server() and not _vital_install.is_empty():
+		_server_tick_vital_install(delta)
 	if multiplayer.is_server() and net_sprinting and alive:
 		_noise_cooldown -= delta
 		if _noise_cooldown <= 0.0:
@@ -766,7 +773,8 @@ func _update_spectator() -> void:
 
 
 ## Servidor: remove um membro do jogador e o transforma em um Prop físico no mundo.
-func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF) -> Prop:
+## `lethal = false` é usado na troca de órgão; `sync = false` deixa o envio do corpo para quem chamou.
+func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF, lethal := true, sync := true) -> Prop:
 	if not multiplayer.is_server():
 		return null
 	var def := get_body_part_def(slot)
@@ -775,7 +783,8 @@ func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF)
 	var saved_value: int = int(body_part_values.get(slot, -1))
 	body_parts[slot] = ""
 	body_part_values.erase(slot)
-	_sync_body_parts.rpc(body_parts)
+	if sync:
+		_sync_body_parts.rpc(body_parts)
 	if not can_hold_props() and is_instance_valid(held_prop):
 		held_prop.holders.erase(peer_id)
 		grab_lost.rpc_id(peer_id)
@@ -789,7 +798,7 @@ func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF)
 				forward = Vector3.FORWARD
 			spawn_at = global_position + Vector3.UP * 1.05 + forward.normalized() * 0.85
 		spawned = main.spawn_prop(def, spawn_at, "", saved_value)
-	if def.vital and alive:
+	if def.vital and alive and lethal:
 		health = 0
 		_sync_vitals.rpc(0, false)
 		loadout.server_drop_all()
@@ -819,6 +828,15 @@ func server_attach_part_from_prop(prop: Prop, explicit_slot: int = -1) -> bool:
 	if part_def == null:
 		return false
 	var target_slot := (explicit_slot as BodyPartDef.Slot) if (explicit_slot >= 0 and explicit_slot < BodyPartDef.ALL_SLOTS.size()) else resolve_install_slot(part_def)
+	if alive and is_vital_slot(target_slot) and has_body_part(target_slot):
+		return _server_begin_vital_install(prop, target_slot)
+	_server_install_from_prop(prop, target_slot)
+	return true
+
+
+## Servidor: troca atômica; o órgão antigo cai como Prop e o corpo final vai num único sync.
+func _server_install_from_prop(prop: Prop, target_slot: BodyPartDef.Slot) -> void:
+	var part_def := prop.def as BodyPartDef
 	var part_value := prop.net_value
 	var drop_origin := prop.global_position + Vector3.UP * 0.25
 	for holder_id: int in prop.holders.keys():
@@ -828,11 +846,58 @@ func server_attach_part_from_prop(prop: Prop, explicit_slot: int = -1) -> bool:
 	prop.holders.clear()
 	prop.queue_free()
 	if has_body_part(target_slot):
-		server_detach_part(target_slot, drop_origin)
+		server_detach_part(target_slot, drop_origin, false, false)
 	body_parts[target_slot] = part_def.resource_path
 	body_part_values[target_slot] = part_value
 	_sync_body_parts.rpc(body_parts)
+
+
+func _server_begin_vital_install(prop: Prop, target_slot: BodyPartDef.Slot) -> bool:
+	if not _vital_install.is_empty():
+		return false
+	_vital_install = {
+		"prop": prop,
+		"slot": target_slot,
+		"left": VITAL_INSTALL_SECONDS,
+		"origin": global_position,
+		"health": health,
+	}
+	_install_channel.rpc_id(peer_id, VITAL_INSTALL_SECONDS, prop.def.display_name)
 	return true
+
+
+## Servidor: avança o canal; mover, levar dano, morrer ou perder o implante de vista cancela.
+func _server_tick_vital_install(delta: float) -> void:
+	var prop: Variant = _vital_install["prop"]
+	var cancelled: bool = not alive \
+		or health < int(_vital_install["health"]) \
+		or global_position.distance_to(_vital_install["origin"]) > VITAL_INSTALL_MOVE_TOLERANCE \
+		or not is_instance_valid(prop) \
+		or (prop as Prop).global_position.distance_to(global_position) > Prop.BREAK_RANGE
+	if cancelled:
+		_vital_install = {}
+		_install_channel.rpc_id(peer_id, 0.0, "Instalação cancelada")
+		return
+	_vital_install["left"] = float(_vital_install["left"]) - delta
+	if float(_vital_install["left"]) > 0.0:
+		return
+	var slot: BodyPartDef.Slot = _vital_install["slot"]
+	_vital_install = {}
+	_server_install_from_prop(prop as Prop, slot)
+	_install_channel.rpc_id(peer_id, 0.0, "")
+
+
+## Servidor -> dono: inicia (seconds > 0) ou encerra o canal; texto sem tempo vira aviso curto.
+@rpc("any_peer", "call_local", "reliable")
+func _install_channel(seconds: float, label: String) -> void:
+	if Net.sender_id() != 1:
+		return
+	_install_left = seconds
+	_install_total = seconds
+	_install_label = label
+	if seconds <= 0.0 and not label.is_empty():
+		carry_notice = label
+		_carry_notice_timer = CARRY_NOTICE_SECONDS
 
 
 @rpc("any_peer", "call_local", "reliable")
@@ -845,6 +910,8 @@ func request_detach_part(slot: int) -> void:
 	if caller == null or not caller.alive:
 		return
 	if caller != self and caller.global_position.distance_to(global_position) > BODY_INTERACT_RANGE:
+		return
+	if is_protected_slot(slot as BodyPartDef.Slot):
 		return
 	server_detach_part(slot as BodyPartDef.Slot)
 
