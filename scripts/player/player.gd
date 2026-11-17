@@ -756,10 +756,15 @@ func _update_hover() -> void:
 			var part_def := prop.def as BodyPartDef
 			var target_slot := resolve_install_slot(part_def)
 			var slot_label := BodyPartDef.slot_name(target_slot)
+			var part_label := part_def.display_name
+			if part_def.is_cybernetic:
+				part_label = "[%s] %s" % [BodyPartDef.rarity_name(part_def.rarity), part_label]
+				if prop.net_seal_broken:
+					part_label += " (lacre rompido)"
 			if can_hold_props() and not weapon_in_hand:
-				hover_text = "[Botão esq.] %s  |  [E] Instalar %s (%s)  $%d" % [grab_verb, part_def.display_name, slot_label, prop.net_value]
+				hover_text = "[Botão esq.] %s  |  [E] Instalar %s (%s)  $%d" % [grab_verb, part_label, slot_label, prop.net_value]
 			else:
-				hover_text = "[E] Instalar %s (%s)  $%d" % [part_def.display_name, slot_label, prop.net_value]
+				hover_text = "[E] Instalar %s (%s)  $%d" % [part_label, slot_label, prop.net_value]
 		elif weapon_in_hand:
 			hover_text = "Guarde a arma para %s  %s  $%d" % [grab_verb.to_lower(), prop.def.display_name, prop.net_value]
 		elif can_hold_props():
@@ -813,6 +818,10 @@ func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF,
 	if def == null:
 		return null
 	var saved_value: int = int(body_part_values.get(slot, -1))
+	# Lacre rompido: remover um implante instalado custa 25% do valor atual (mantém 75%).
+	const SEAL_BREAK_KEEP := 0.75
+	if def.is_cybernetic and saved_value >= 0:
+		saved_value = ceili(saved_value * SEAL_BREAK_KEEP)
 	body_parts[slot] = ""
 	body_part_values.erase(slot)
 	if sync:
@@ -830,6 +839,8 @@ func server_detach_part(slot: BodyPartDef.Slot, drop_pos: Vector3 = Vector3.INF,
 				forward = Vector3.FORWARD
 			spawn_at = global_position + Vector3.UP * 1.05 + forward.normalized() * 0.85
 		spawned = main.spawn_prop(def, spawn_at, "", saved_value)
+		if def.is_cybernetic and spawned:
+			spawned.net_seal_broken = true
 	if def.vital and alive and lethal:
 		health = 0
 		_sync_vitals.rpc(0, false)
