@@ -1,5 +1,7 @@
 # Plano de Implementação: Pesos, Arrasto e Cyberwares
 
+📌 **Status em 17/11/2026:** as fases 0 a 5 estão implementadas na branch `feat/cyberwares`, com testes de smoke escritos para cada fase. Nenhum teste foi executado, porque não havia binário do Godot na máquina; a primeira execução de `tests/run_smoke.sh` é o próximo passo antes do merge.
+
 Este plano divide a implementação de [`especificacao_cyberwares_e_pesos.md`](especificacao_cyberwares_e_pesos.md) em 6 fases e 20 tarefas. Cada tarefa tem dono de arquivo, modelo, dependência e critério de aceite. O objetivo é gastar o modelo mais caro só onde um erro custa caro (física autoritativa e rede) e entregar o resto a subagentes baratos com briefings fechados, que não precisam explorar o repositório.
 
 ---
