@@ -31,6 +31,13 @@ const DETACH_PRIORITY: Array[BodyPartDef.Slot] = [
 	BodyPartDef.Slot.TORSO,
 ]
 
+## Força horizontal (N) aplicada em props que bloqueiam o caminho.
+const PUSH_FORCE := 600.0
+## Segundos bloqueado por um prop antes de golpeá-lo.
+const BLOCKED_STRIKE_SECONDS := 4.0
+## Impulso do golpe por kg de massa do prop.
+const STRIKE_IMPULSE_PER_KG := 3.0
+
 @export var roam_speed := 2.2
 @export var investigate_speed := 3.5
 @export var chase_speed := 5.2
@@ -69,6 +76,8 @@ var _attack_timer := 0.0
 var _stun_timer := 0.0
 var _last_knock_impulse := Vector3.ZERO
 var _part_cache: Dictionary = {}
+## Tempo acumulado preso contra um Prop.
+var _blocked_time := 0.0
 
 @onready var agent: NavigationAgent3D = $Agent
 @onready var visuals: Node3D = $Visuals
@@ -315,6 +324,42 @@ func _move(delta: float) -> void:
 	velocity.z = horizontal.z
 	velocity.y = 0.0 if is_on_floor() else velocity.y + get_gravity().y * delta
 	move_and_slide()
+	_push_and_break_props(horizontal, delta)
+
+
+## Empurra props no caminho e, se continuar bloqueado, golpeia o prop (perde valor).
+func _push_and_break_props(horizontal: Vector3, delta: float) -> void:
+	var dir := horizontal
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		_blocked_time = 0.0
+		return
+	dir = dir.normalized()
+	var blocking: Prop = null
+	for i in get_slide_collision_count():
+		var prop := get_slide_collision(i).get_collider() as Prop
+		if prop == null:
+			continue
+		prop.sleeping = false
+		prop.apply_central_force(dir * PUSH_FORCE)
+		blocking = prop
+	var real := get_real_velocity()
+	real.y = 0.0
+	if horizontal.length() > 0.5 and real.length() < 0.3 and blocking != null:
+		_blocked_time += delta
+	else:
+		_blocked_time = 0.0
+	if _blocked_time < BLOCKED_STRIKE_SECONDS or blocking == null:
+		return
+	_blocked_time = 0.0
+	var loss := maxi(ceili(blocking._original_value * 0.10), 1)
+	blocking.net_value -= loss
+	blocking._show_loss.rpc(loss)
+	Game.emit_noise(blocking.global_position, 0.12)
+	if blocking.net_value <= 0:
+		blocking.queue_free()
+		return
+	blocking.apply_central_impulse(dir * STRIKE_IMPULSE_PER_KG * blocking.mass + Vector3.UP * 1.5 * blocking.mass)
 
 
 func _move_stunned(delta: float) -> void:
