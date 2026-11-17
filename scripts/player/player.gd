@@ -54,6 +54,7 @@ const DETACH_PRIORITY: Array[BodyPartDef.Slot] = [
 @export var stamina_regen := 18.0
 
 var peer_id := 0
+var implants: ImplantEffects
 var health := 100
 var alive := true
 var stamina := 100.0
@@ -135,6 +136,10 @@ func _exit_tree() -> void:
 
 
 func _ready() -> void:
+	implants = ImplantEffects.new()
+	implants.name = "Implants"
+	add_child(implants)
+	implants.setup(self)
 	collider.shape = collider.shape.duplicate()
 	ray.add_exception(self)
 	rig.setup_rig(_slot_meshes, get_rid())
@@ -262,8 +267,24 @@ func get_aim_direction() -> Vector3:
 	return Basis.from_euler(Vector3(net_pitch, net_yaw, 0.0)) * Vector3.FORWARD
 
 
+## Velocidade de queda segura, somada aos bônus das pernas implantadas.
+func get_safe_fall_speed() -> float:
+	return SAFE_FALL_SPEED + (implants.fall_speed_bonus() if implants else 0.0)
+
+
+## Dono: pedido de uma habilidade de implante ao servidor.
+@rpc("any_peer", "call_local", "reliable")
+func request_implant_action(ability_id: StringName, payload: Dictionary) -> void:
+	if not multiplayer.is_server() or Net.sender_id() != peer_id or not alive:
+		return
+	if implants == null or not implants.has_ability(ability_id):
+		return
+	implants.get_ability(ability_id).on_server_request(payload)
+
+
 func get_hold_target() -> Vector3:
-	return head.global_position + get_aim_direction() * net_hold_distance
+	var offset := implants.hold_offset() if implants else Vector3.ZERO
+	return head.global_position + get_aim_direction() * net_hold_distance + offset
 
 
 ## Escolhe o melhor slot para instalar um membro (braço ou perna usa o lado vazio ou o lado orgânico antes de substituir um cibernético).
@@ -390,6 +411,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			try_grab(target)
 	elif event.is_action_released("grab"):
 		release_grab(false)
+	elif event.is_action_pressed("implant_action"):
+		if implants:
+			implants.notify_action()
 	elif event.is_action_pressed("throw"):
 		if is_instance_valid(held_prop):
 			release_grab(true)
@@ -611,8 +635,11 @@ func _local_physics(delta: float) -> void:
 	_prev_fall_speed = -velocity.y
 	var velocity_before := velocity
 	move_and_slide()
-	if was_airborne and is_on_floor() and _prev_fall_speed > SAFE_FALL_SPEED:
-		_request_fall_damage.rpc_id(1, _prev_fall_speed)
+	if was_airborne and is_on_floor():
+		if implants:
+			implants.notify_landed(_prev_fall_speed)
+		if _prev_fall_speed > get_safe_fall_speed():
+			_request_fall_damage.rpc_id(1, _prev_fall_speed)
 	_check_wall_slam(velocity_before)
 	_push_props(delta)
 	_publish_state(crouching, sprinting)
@@ -625,7 +652,7 @@ func _local_physics(delta: float) -> void:
 func _check_wall_slam(velocity_before: Vector3) -> void:
 	if (_stagger_timer > 0.0 or _knock_timer > 0.0) and is_on_wall():
 		var slam_speed := -velocity_before.dot(get_wall_normal())
-		if slam_speed > SAFE_FALL_SPEED:
+		if slam_speed > get_safe_fall_speed():
 			_request_fall_damage.rpc_id(1, slam_speed)
 
 
@@ -643,13 +670,15 @@ func _update_movement(delta: float, has_control: bool, crouching: bool) -> bool:
 	var can_sprint := get_leg_count() > 0 and not crouching and carry_zone != Prop.LoadZone.STRAIN and carry_zone != Prop.LoadZone.DRAG
 	var wants_sprint := has_control and Input.is_action_pressed("sprint") and input.y < 0.0 and can_sprint
 	if stamina <= 0.0:
+		if not _exhausted and implants:
+			implants.notify_exhausted()
 		_exhausted = true
 	elif stamina >= 25.0:
 		_exhausted = false
 	var sprinting := wants_sprint and not _exhausted
-	stamina = clampf(stamina + (-stamina_drain if sprinting else stamina_regen) * delta, 0.0, 100.0)
+	stamina = clampf(stamina + (-stamina_drain if sprinting else stamina_regen * (implants.stamina_regen_mult() if implants else 1.0)) * delta, 0.0, 100.0)
 	var base_speed := crouch_speed if crouching else (sprint_speed if sprinting else walk_speed)
-	var speed := base_speed * get_leg_speed_multiplier()
+	var speed := base_speed * get_leg_speed_multiplier() * (implants.move_speed_mult() if implants else 1.0)
 	if is_instance_valid(held_prop) and carry_ratio > 0.0:
 		speed *= Prop.speed_mult_for_ratio(carry_ratio)
 	var wish := (transform.basis * Vector3(input.x, 0.0, input.y)) * speed
@@ -952,10 +981,14 @@ func _sync_body_parts(new_parts: Dictionary) -> void:
 
 
 ## Servidor: aplica dano e empurrão. O dono executa o empurrão, pois controla a física.
-func server_hit(damage: int, knock: Vector3, stun := 1.5, _source: Game.HitSource = Game.HitSource.GENERIC) -> void:
+func server_hit(damage: int, knock: Vector3, stun := 1.5, source: Game.HitSource = Game.HitSource.GENERIC) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
+	if implants:
+		damage = roundi(damage * implants.damage_mult(source))
 	health = maxi(health - damage, 0)
+	if implants:
+		implants.notify_hit(source, damage)
 	_sync_vitals.rpc(health, health > 0)
 	if health > 0:
 		_receive_knock.rpc_id(peer_id, knock, stun)
@@ -1037,7 +1070,7 @@ func grab_lost() -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _request_fall_damage(speed: float) -> void:
 	if multiplayer.is_server() and Net.sender_id() == peer_id:
-		server_hit(roundi((speed - SAFE_FALL_SPEED) * FALL_DAMAGE_PER_MS), Vector3.ZERO, 1.5, Game.HitSource.FALL)
+		server_hit(roundi((speed - get_safe_fall_speed()) * FALL_DAMAGE_PER_MS), Vector3.ZERO, 1.5, Game.HitSource.FALL)
 
 
 func _set_alive(value: bool) -> void:
@@ -1064,7 +1097,7 @@ func _set_alive(value: bool) -> void:
 func send_voice(packet: PackedByteArray) -> void:
 	_voice_frame.rpc(packet)
 	if multiplayer.is_server():
-		Game.emit_noise(global_position, minf(VoiceCodec.rms(VoiceCodec.decode(packet)), Game.NOISE_VOICE_CAP))
+		Game.emit_noise(global_position, minf(VoiceCodec.rms(VoiceCodec.decode(packet)) * implants.voice_mult(), implants.voice_cap()))
 
 
 ## Canal 1 separa a voz do tráfego confiável. O servidor retransmite aos demais clientes.
@@ -1076,7 +1109,7 @@ func _voice_frame(packet: PackedByteArray) -> void:
 	voice_level = VoiceCodec.rms(samples)
 	voice_frames_received += 1
 	if multiplayer.is_server():
-		Game.emit_noise(global_position, minf(voice_level, Game.NOISE_VOICE_CAP))
+		Game.emit_noise(global_position, minf(voice_level * implants.voice_mult(), implants.voice_cap()))
 	var listener := Game.local_player()
 	# Mortos falam apenas entre si; vivos não os escutam.
 	if not alive and listener and listener.alive:
