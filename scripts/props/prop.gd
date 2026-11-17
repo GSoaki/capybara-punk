@@ -31,6 +31,8 @@ var net_value := 0
 var net_holder_ids := PackedInt32Array()
 ## Razão de carga calculada no servidor; 0 sem ninguém segurando. Fonte única para HUD e velocidade.
 var net_load_ratio := 0.0
+## Verdadeiro quando o implante foi removido de um jogador (lacre rompido, perdeu 25% do valor).
+var net_seal_broken := false
 
 ## peer_id -> Player. Somente no servidor.
 var holders: Dictionary = {}

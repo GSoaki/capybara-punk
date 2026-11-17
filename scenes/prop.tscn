@@ -18,6 +18,9 @@ properties/3/replication_mode = 2
 properties/4/path = NodePath(".:net_load_ratio")
 properties/4/spawn = true
 properties/4/replication_mode = 2
+properties/5/path = NodePath(".:net_seal_broken")
+properties/5/spawn = true
+properties/5/replication_mode = 2
 
 [node name="Prop" type="RigidBody3D"]
 collision_layer = 4
