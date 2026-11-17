@@ -215,6 +215,9 @@ func run_host() -> void:
 	me.set_third_person(false)
 	check("camera 1a pessoa restaura visao", not me.third_person and not me.visuals.visible and is_zero_approx(me.camera.position.z))
 	await test_vital_swap_host(me, remote)
+	await test_load_zones_host(me)
+	await test_implants_host(me)
+	test_implant_pool_host()
 
 	# Voz: frame do cliente chega ao host e gera barulho que o monstro escuta.
 	var heard := [0.0]
@@ -374,6 +377,213 @@ func test_vital_swap_host(me: Player, remote: Player) -> void:
 		if prop.def is BodyPartDef:
 			prop.queue_free()
 	await pause(0.1)
+
+
+func expected_zone(ratio: float) -> Prop.LoadZone:
+	if ratio >= 1.35:
+		return Prop.LoadZone.EASY
+	if ratio >= 1.02:
+		return Prop.LoadZone.STRAIN
+	if ratio >= 0.65:
+		return Prop.LoadZone.DRAG
+	return Prop.LoadZone.IMMOBILE
+
+
+func drop_loose_parts() -> void:
+	for prop: Prop in main.props.get_children():
+		if prop.def is BodyPartDef:
+			prop.queue_free()
+
+
+## Instala um membro não vital e descarta o que for ejetado.
+func swap_limb(me: Player, def: BodyPartDef, value: int, slot: BodyPartDef.Slot) -> void:
+	var ejected := me.server_install_part(def, value, slot)
+	if is_instance_valid(ejected):
+		ejected.queue_free()
+
+
+func test_load_zones_host(me: Player) -> void:
+	# Zonas e velocidade são funções puras da razão força / peso.
+	var masses := [3, 15, 26, 35, 54, 70, 79, 105]
+	var forces := [350.0, 700.0, 1050.0, 1400.0]
+	var mismatches := 0
+	for m: int in masses:
+		for f: float in forces:
+			var ratio := f / (m * 9.8)
+			if Prop.zone_for_ratio(ratio) != expected_zone(ratio):
+				mismatches += 1
+	check("zona bate com a tabela para todas as massas e forças", mismatches == 0)
+	check("26 kg com 350 é EASY", Prop.zone_for_ratio(350.0 / (26 * 9.8)) == Prop.LoadZone.EASY)
+	check("35 kg com 350 é STRAIN", Prop.zone_for_ratio(350.0 / (35 * 9.8)) == Prop.LoadZone.STRAIN)
+	check("54 kg com 350 é DRAG", Prop.zone_for_ratio(350.0 / (54 * 9.8)) == Prop.LoadZone.DRAG)
+	check("70 kg com 350 é IMMOBILE", Prop.zone_for_ratio(350.0 / (70 * 9.8)) == Prop.LoadZone.IMMOBILE)
+	check("70 kg com 700 é STRAIN", Prop.zone_for_ratio(700.0 / (70 * 9.8)) == Prop.LoadZone.STRAIN)
+	check("79 kg com 700 é DRAG", Prop.zone_for_ratio(700.0 / (79 * 9.8)) == Prop.LoadZone.DRAG)
+	check("105 kg com 700 é DRAG", Prop.zone_for_ratio(700.0 / (105 * 9.8)) == Prop.LoadZone.DRAG)
+	check("105 kg com 1050 é STRAIN", Prop.zone_for_ratio(1050.0 / (105 * 9.8)) == Prop.LoadZone.STRAIN)
+	check("79 kg com 1050 é EASY", Prop.zone_for_ratio(1050.0 / (79 * 9.8)) == Prop.LoadZone.EASY)
+	check("velocidade em r=1,35 é 0,75", absf(Prop.speed_mult_for_ratio(1.35) - 0.75) < 0.001)
+	check("velocidade em r=1,02 é 0,55", absf(Prop.speed_mult_for_ratio(1.02) - 0.55) < 0.001)
+	check("velocidade em r=0,65 é 0,25", absf(Prop.speed_mult_for_ratio(0.65) - 0.25) < 0.001)
+	check("velocidade em r=4 é 1,0", is_equal_approx(Prop.speed_mult_for_ratio(4.0), 1.0))
+	check("velocidade abaixo de 0,65 é 1,0", is_equal_approx(Prop.speed_mult_for_ratio(0.5), 1.0))
+
+	# Pessoas necessárias: ceil(peso * 1,02 / 350), no mínimo 1.
+	var people_ok := true
+	var drag_ok := true
+	for m: int in [35, 70, 105]:
+		var prop: Prop = main.spawn_prop(load("res://resources/props/test/test_%dkg.tres" % m), Vector3(6.0, 0.6, 6.0), "TestPeople%d" % m)
+		var expected := maxi(ceili(m * 9.8 * 1.02 / 350.0), 1)
+		var got := prop.people_needed()
+		print("people_needed %d kg = %d (esperado %d)" % [m, got, expected])
+		people_ok = people_ok and got == expected
+		drag_ok = drag_ok and prop.get_node_or_null("Drag") is PropDrag
+		prop.queue_free()
+	check("people_needed segue a fórmula", people_ok)
+	check("70 kg exige 2 pessoas e 105 kg exige 3", maxi(ceili(70 * 9.8 * 1.02 / 350.0), 1) == 2 and maxi(ceili(105 * 9.8 * 1.02 / 350.0), 1) == 3)
+	check("props do servidor têm nó Drag", drag_ok)
+	await pause(0.1)
+
+	# Razão ao vivo: braços orgânicos dão 350 de força, então 54 kg arrasta.
+	var left_def := me.get_body_part_def(BodyPartDef.Slot.LEFT_ARM)
+	var right_def := me.get_body_part_def(BodyPartDef.Slot.RIGHT_ARM)
+	var left_value := int(me.body_part_values.get(BodyPartDef.Slot.LEFT_ARM, -1))
+	var right_value := int(me.body_part_values.get(BodyPartDef.Slot.RIGHT_ARM, -1))
+	swap_limb(me, load("res://resources/body_parts/organic_left_arm.tres"), -1, BodyPartDef.Slot.LEFT_ARM)
+	swap_limb(me, load("res://resources/body_parts/organic_right_arm.tres"), -1, BodyPartDef.Slot.RIGHT_ARM)
+	await pause(0.1)
+	check("braços orgânicos dão 350 de força", is_equal_approx(me.get_grip_force(), 350.0))
+	await place(me, Vector3(0.0, 0.1, 1.0))
+	me.head.rotation.x = 0.3
+	var heavy: Prop = main.spawn_prop(load("res://resources/props/test/test_54kg.tres"), Vector3(0.0, 0.5, -0.8), "TestLoad54")
+	await pause(0.8)
+	me.try_grab(heavy)
+	var held := await wait_until(func() -> bool: return heavy.holders.has(1), 3.0)
+	check("host segura o prop de 54 kg", held)
+	await pause(0.3)
+	var want := me.get_grip_force() / (54.0 * 9.8)
+	check("razão de carga ao vivo (%.3f, esperado %.3f)" % [heavy.net_load_ratio, want], absf(heavy.net_load_ratio - want) < 0.01)
+	check("54 kg com 350 é zona DRAG ao vivo", heavy.get_load_zone() == Prop.LoadZone.DRAG)
+	check("prop de 54 kg tem nó Drag", heavy.get_node_or_null("Drag") is PropDrag)
+	me.release_grab(false)
+	await pause(0.2)
+	check("prop de 54 kg solto", heavy.holders.is_empty())
+	heavy.queue_free()
+
+	# Restaura os braços de antes.
+	if left_def:
+		swap_limb(me, left_def, left_value, BodyPartDef.Slot.LEFT_ARM)
+	if right_def:
+		swap_limb(me, right_def, right_value, BodyPartDef.Slot.RIGHT_ARM)
+	drop_loose_parts()
+	await pause(0.2)
+
+
+func test_implants_host(me: Player) -> void:
+	var slots := [BodyPartDef.Slot.LEFT_ARM, BodyPartDef.Slot.RIGHT_ARM, BodyPartDef.Slot.LEFT_LEG, BodyPartDef.Slot.RIGHT_LEG]
+	var saved_defs := {}
+	var saved_values := {}
+	for slot: BodyPartDef.Slot in slots:
+		saved_defs[slot] = me.get_body_part_def(slot)
+		saved_values[slot] = int(me.body_part_values.get(slot, -1))
+	var organic_left_arm: BodyPartDef = load("res://resources/body_parts/organic_left_arm.tres")
+	var organic_right_arm: BodyPartDef = load("res://resources/body_parts/organic_right_arm.tres")
+	var organic_left_leg: BodyPartDef = load("res://resources/body_parts/organic_left_leg.tres")
+	var organic_right_leg: BodyPartDef = load("res://resources/body_parts/organic_right_leg.tres")
+	swap_limb(me, organic_left_arm, -1, BodyPartDef.Slot.LEFT_ARM)
+	swap_limb(me, organic_right_arm, -1, BodyPartDef.Slot.RIGHT_ARM)
+	swap_limb(me, organic_left_leg, -1, BodyPartDef.Slot.LEFT_LEG)
+	swap_limb(me, organic_right_leg, -1, BodyPartDef.Slot.RIGHT_LEG)
+	await pause(0.1)
+	me.health = 100
+
+	# A cabeça scanner foi instalada pela troca vital anterior.
+	if me.get_body_part_def(BodyPartDef.Slot.HEAD).resource_path.ends_with("scanner_head.tres"):
+		check("cabeça scanner limita a voz a 0,20", absf(me.implants.voice_cap() - 0.20) < 0.001)
+		check("cabeça scanner dá scanner_pulse", me.implants.has_ability(&"scanner_pulse"))
+
+	# Torso de bobina: troca vital canalizada de 2 s.
+	check("torso orgânico sem redução de dano", is_equal_approx(me.implants.damage_mult(Game.HitSource.MONSTER), 1.0))
+	me.velocity = Vector3.ZERO
+	var coil: Prop = main.spawn_prop(load("res://resources/body_parts/coil_torso.tres"), me.global_position + Vector3(0.5, 0.5, 0.0), "TestCoilTorso2")
+	check("troca para torso de bobina inicia", me.server_attach_part_from_prop(coil))
+	await pause(2.4)
+	me.velocity = Vector3.ZERO
+	check("torso de bobina instalado sem matar", me.alive and me.get_body_part_def(BodyPartDef.Slot.TORSO).resource_path.ends_with("coil_torso.tres"))
+	check("bobina reduz dano de monstro em 25%", absf(me.implants.damage_mult(Game.HitSource.MONSTER) - 0.75) < 0.001)
+	check("bobina não reduz dano de queda", is_equal_approx(me.implants.damage_mult(Game.HitSource.FALL), 1.0))
+	check("bobina reduz velocidade para 0,9", absf(me.implants.move_speed_mult() - 0.9) < 0.001)
+	check("bobina dá coil_discharge", me.implants.has_ability(&"coil_discharge"))
+	var organic_torso: Prop = main.spawn_prop(load("res://resources/body_parts/organic_torso.tres"), me.global_position + Vector3(0.5, 0.5, 0.0), "TestOrganicTorso")
+	check("volta ao torso orgânico inicia", me.server_attach_part_from_prop(organic_torso))
+	await pause(2.4)
+	me.velocity = Vector3.ZERO
+	check("torso orgânico restaurado", me.alive and me.get_body_part_def(BodyPartDef.Slot.TORSO).resource_path.ends_with("organic_torso.tres"))
+	check("sem bobina o dano volta a 1,0", is_equal_approx(me.implants.damage_mult(Game.HitSource.MONSTER), 1.0) and not me.implants.has_ability(&"coil_discharge"))
+	drop_loose_parts()
+
+	# Pernas pneumáticas.
+	var pneumatic: BodyPartDef = load("res://resources/body_parts/pneumatic_leg.tres")
+	var base_fall := me.get_safe_fall_speed()
+	swap_limb(me, pneumatic, -1, BodyPartDef.Slot.LEFT_LEG)
+	swap_limb(me, pneumatic, -1, BodyPartDef.Slot.RIGHT_LEG)
+	await pause(0.1)
+	check("pernas pneumáticas: queda segura 16 (base %.1f)" % base_fall, absf(me.get_safe_fall_speed() - 16.0) < 0.1)
+	check("pernas pneumáticas dão pneumatic_valve", me.implants.has_ability(&"pneumatic_valve"))
+	swap_limb(me, organic_left_leg, -1, BodyPartDef.Slot.LEFT_LEG)
+	swap_limb(me, organic_right_leg, -1, BodyPartDef.Slot.RIGHT_LEG)
+	await pause(0.1)
+	check("pernas orgânicas perdem pneumatic_valve", not me.implants.has_ability(&"pneumatic_valve"))
+
+	# Braço de mula: 650 + 175.
+	swap_limb(me, load("res://resources/body_parts/mule_arm.tres"), -1, BodyPartDef.Slot.LEFT_ARM)
+	await pause(0.1)
+	check("braço de mula soma 825 de força", is_equal_approx(me.get_grip_force(), 825.0))
+	check("braço de mula dá mule_overload", me.implants.has_ability(&"mule_overload"))
+	swap_limb(me, organic_left_arm, -1, BodyPartDef.Slot.LEFT_ARM)
+	await pause(0.1)
+	check("sem mula a força volta a 350", is_equal_approx(me.get_grip_force(), 350.0))
+
+	# Lacre: remover implante instalado mantém 75% do valor.
+	var forklift: BodyPartDef = load("res://resources/body_parts/forklift_arm.tres")
+	swap_limb(me, forklift, 200, BodyPartDef.Slot.RIGHT_ARM)
+	var sealed := me.server_detach_part(BodyPartDef.Slot.RIGHT_ARM, me.global_position + Vector3(0.0, 1.0, 2.0))
+	check("implante destacado vira Prop", sealed != null and sealed.def == forklift)
+	if sealed:
+		check("lacre rompido mantém 75%% do valor (%d)" % sealed.net_value, sealed.net_value == 150)
+		check("lacre rompido marcado no Prop", sealed.net_seal_broken)
+		sealed.queue_free()
+	swap_limb(me, organic_right_arm, -1, BodyPartDef.Slot.RIGHT_ARM)
+
+	# Restaura os membros de antes e limpa.
+	for slot: BodyPartDef.Slot in slots:
+		var def: BodyPartDef = saved_defs[slot]
+		if def:
+			swap_limb(me, def, saved_values[slot], slot)
+	me.health = 100
+	me.velocity = Vector3.ZERO
+	drop_loose_parts()
+	await pause(0.2)
+
+
+func test_implant_pool_host() -> void:
+	var pool: ImplantPool = main.implant_pool
+	if pool == null:
+		pool = load("res://resources/loot/implant_pool.tres")
+	check("pool de implantes carregado", pool != null and not pool.green.is_empty())
+	if pool == null:
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1234
+	var all_valid := true
+	var all_green := true
+	for i in 200:
+		var picked: BodyPartDef = pool.pick(rng)
+		all_valid = all_valid and picked != null and picked.is_cybernetic
+		var green: BodyPartDef = pool.pick_green(rng)
+		all_green = all_green and green != null and green.rarity == BodyPartDef.Rarity.GREEN
+	check("200 sorteios do pool são implantes válidos", all_valid)
+	check("pick_green sempre devolve raridade verde", all_green)
 
 
 func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop) -> void:
