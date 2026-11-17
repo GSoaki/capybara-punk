@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 1
+is_cybernetic = true
+grip_force = 0.0
+leg_speed_factor = 0.0
+leg_jump_factor = 0.0
+vital = true
+rarity = 2
+fall_speed_bonus = 0.0
+grip_jitter = 0.0
+damage_reduction = 0.25
+stamina_regen_mult = 1.4
+move_speed_mult = 0.9
+voice_noise_mult = 1.0
+ability_id = &"coil_discharge"
+display_name = "Tronco de Bobina"
+size = Vector3(0.46, 0.62, 0.28)
+color = Color(0.671, 0.278, 0.737, 1)
+mass = 18.0
+min_value = 450
+max_value = 620
+impact_threshold = 9.0
+fragility = 0.05
+spawn_weight = 0.0

@@ -13,6 +13,8 @@ enum Slot {
 	RIGHT_LEG,
 }
 
+enum Rarity { GREEN, BLUE, PURPLE, GOLD }
+
 const ALL_SLOTS: Array[Slot] = [
 	Slot.HEAD,
 	Slot.TORSO,
@@ -33,6 +35,48 @@ const ALL_SLOTS: Array[Slot] = [
 @export var leg_jump_factor := 0.0
 ## Se verdadeiro, remover este membro incapacita/mata o jogador imediatamente (cabeça e tronco).
 @export var vital := false
+## Raridade do implante; define cor e nome exibidos na interface.
+@export var rarity: Rarity = Rarity.GREEN
+## Velocidade de queda segura (m/s) somada por perna instalada.
+@export var fall_speed_bonus := 0.0
+## Tremor (m) do alvo de segurar quando correndo com itens frágeis.
+@export var grip_jitter := 0.0
+## Fração de dano reduzido (0 a 1).
+@export var damage_reduction := 0.0
+## Multiplicador da regeneração de stamina.
+@export var stamina_regen_mult := 1.0
+## Multiplicador da velocidade de movimento.
+@export var move_speed_mult := 1.0
+## Multiplicador do ruído produzido pela voz.
+@export var voice_noise_mult := 1.0
+## Identificador da habilidade ativa concedida pelo implante.
+@export var ability_id: StringName = &""
+
+
+static func rarity_color(r: Rarity) -> Color:
+	match r:
+		Rarity.GREEN:
+			return Color("4CAF50")
+		Rarity.BLUE:
+			return Color("29B6F6")
+		Rarity.PURPLE:
+			return Color("AB47BC")
+		Rarity.GOLD:
+			return Color("FFB300")
+	return Color.WHITE
+
+
+static func rarity_name(r: Rarity) -> String:
+	match r:
+		Rarity.GREEN:
+			return "Verde"
+		Rarity.BLUE:
+			return "Azul"
+		Rarity.PURPLE:
+			return "Roxa"
+		Rarity.GOLD:
+			return "Dourada"
+	return "Desconhecida"
 
 
 static func slot_name(p_slot: Slot) -> String:

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="BodyPartDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+slot = 0
+is_cybernetic = true
+grip_force = 0.0
+leg_speed_factor = 0.0
+leg_jump_factor = 0.0
+vital = true
+rarity = 1
+fall_speed_bonus = 0.0
+grip_jitter = 0.0
+damage_reduction = 0.0
+stamina_regen_mult = 1.0
+move_speed_mult = 1.0
+voice_noise_mult = 1.35
+ability_id = &"scanner_pulse"
+display_name = "Cabeça Scanner"
+size = Vector3(0.32, 0.32, 0.32)
+color = Color(0.161, 0.714, 0.965, 1)
+mass = 5.5
+min_value = 280
+max_value = 380
+impact_threshold = 7.0
+fragility = 0.1
+spawn_weight = 0.0

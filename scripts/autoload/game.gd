@@ -16,6 +16,29 @@ const RESULTS_SECONDS := 6.0
 const BASE_QUOTA := 300
 const QUOTA_GROWTH := 1.35
 
+## Origem de um golpe recebido pelo jogador (ainda não usado).
+enum HitSource { GENERIC, MONSTER, WEAPON, EXPLOSION, FALL, DISCHARGE }
+## Ganho de audição: alcance (m) por unidade de ruído (ainda não usado).
+const HEARING_GAIN := 180.0
+## Alcance máximo de audição dos monstros em metros (ainda não usado).
+const MAX_HEARING_RANGE := 45.0
+## Ruído mínimo emitido pela voz (ainda não usado).
+const NOISE_VOICE_MIN := 0.015
+## Ruído emitido ao correr (ainda não usado).
+const NOISE_SPRINT := 0.06
+## Ruído emitido por pulso do scanner (ainda não usado).
+const NOISE_SCANNER_PULSE := 0.08
+## Ruído emitido pela perna pneumática ao aterrissar ou correr exausto (ainda não usado).
+const NOISE_PNEUMATIC := 0.10
+## Teto de ruído da voz (ainda não usado).
+const NOISE_VOICE_CAP := 0.15
+## Teto de ruído da voz com scanner instalado (ainda não usado).
+const NOISE_VOICE_CAP_SCANNER := 0.20
+## Ruído emitido na descarga da bobina (ainda não usado).
+const NOISE_COIL_DISCHARGE := 0.20
+## Ruído emitido na sobrecarga da mão de mula (ainda não usado).
+const NOISE_MULE_OVERLOAD := 0.25
+
 var phase := Phase.LOBBY
 var day := 1
 var quota := BASE_QUOTA
