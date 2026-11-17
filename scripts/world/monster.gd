@@ -337,8 +337,10 @@ func _push_and_break_props(horizontal: Vector3, delta: float) -> void:
 	dir = dir.normalized()
 	var blocking: Prop = null
 	for i in get_slide_collision_count():
-		var prop := get_slide_collision(i).get_collider() as Prop
-		if prop == null:
+		var collision := get_slide_collision(i)
+		var prop := collision.get_collider() as Prop
+		# Só conta o que está na frente; prop sob os pés não é barricada.
+		if prop == null or collision.get_normal().y > 0.5:
 			continue
 		prop.sleeping = false
 		prop.apply_central_force(dir * PUSH_FORCE)
