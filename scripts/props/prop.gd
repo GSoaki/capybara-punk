@@ -207,6 +207,8 @@ func _apply_holders() -> void:
 		lift = clampf(accel_y * mass, -total, total)
 	var flat_velocity := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
 	for player in active:
+		if player.implants:
+			player.implants.notify_hold_tick(self, get_physics_process_delta_time())
 		var grip := player.get_grip_force()
 		var lift_share := lift * grip / total
 		# Arrastar puxa com o corpo, não com os braços: a horizontal não disputa o orçamento vertical.
