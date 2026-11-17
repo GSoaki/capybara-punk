@@ -395,6 +395,10 @@ func carry_status(me: Player, prop: Prop) -> Dictionary:
 	var names := ", ".join(allies)
 	var missing := prop.people_missing()
 	var missing_text := "  (falta %d)" % missing if missing > 0 else ""
+	# Esforço e arrasto aparecem no painel porque mudam velocidade, ruído e desgaste.
+	var zone := prop.get_load_zone()
+	if zone == Prop.LoadZone.STRAIN or zone == Prop.LoadZone.DRAG:
+		missing_text += "  · %s" % Prop.zone_name(zone)
 	var color := CARRY_NEEDS_HELP if missing > 0 else CARRY_OK
 	if holding:
 		if allies.is_empty():

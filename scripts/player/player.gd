@@ -637,7 +637,10 @@ func _update_movement(delta: float, has_control: bool, crouching: bool) -> bool:
 	var input := Vector2.ZERO
 	if has_control:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var can_sprint := get_leg_count() > 0 and not crouching
+	var carry_ratio := held_prop.get_load_ratio() if is_instance_valid(held_prop) else 0.0
+	var carry_zone := Prop.zone_for_ratio(carry_ratio) if is_instance_valid(held_prop) else Prop.LoadZone.NONE
+	# Em esforço ou arrasto ninguém corre (spec 3.2).
+	var can_sprint := get_leg_count() > 0 and not crouching and carry_zone != Prop.LoadZone.STRAIN and carry_zone != Prop.LoadZone.DRAG
 	var wants_sprint := has_control and Input.is_action_pressed("sprint") and input.y < 0.0 and can_sprint
 	if stamina <= 0.0:
 		_exhausted = true
@@ -647,8 +650,8 @@ func _update_movement(delta: float, has_control: bool, crouching: bool) -> bool:
 	stamina = clampf(stamina + (-stamina_drain if sprinting else stamina_regen) * delta, 0.0, 100.0)
 	var base_speed := crouch_speed if crouching else (sprint_speed if sprinting else walk_speed)
 	var speed := base_speed * get_leg_speed_multiplier()
-	if is_instance_valid(held_prop):
-		speed *= clampf(1.0 - held_prop.mass / 120.0, 0.45, 1.0)
+	if is_instance_valid(held_prop) and carry_ratio > 0.0:
+		speed *= Prop.speed_mult_for_ratio(carry_ratio)
 	var wish := (transform.basis * Vector3(input.x, 0.0, input.y)) * speed
 	var accel := acceleration if is_on_floor() else acceleration * 0.2
 	if _knock_timer > 0.0 or _stagger_timer > 0.0:

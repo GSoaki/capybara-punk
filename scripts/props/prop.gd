@@ -3,6 +3,7 @@ extends RigidBody3D
 ## Loot simulado no servidor. Cada jogador segurando soma uma força limitada,
 ## entao objetos pesados precisam de mais de uma pessoa para sair do chao.
 
+## Força de pegada de um jogador orgânico (dois braços de 175 N). Unidade de "pessoas" no HUD.
 const GRIP_FORCE := 350.0
 const SPRING := 60.0
 const DAMPING := 12.0
@@ -11,12 +12,25 @@ const BREAK_RANGE := 5.5
 const THROW_IMPULSE := 9.0
 const MAX_PUSH_IMPULSE := 12.0
 
+## Zonas de transporte pela razão de carga r = Σ grip / peso (spec 3.2).
+enum LoadZone { NONE, IMMOBILE, DRAG, STRAIN, EASY }
+const RATIO_EASY := 1.35
+const RATIO_LIFT := 1.02
+const RATIO_DRAG := 0.65
+## Em esforço, a base do objeto sobe no máximo isto acima dos pés de quem carrega.
+const STRAIN_CLEARANCE := 0.5
+## Em arrasto, fração da força total usada para aliviar o peso, sem nunca suspender o objeto.
+const DRAG_LIFT_SHARE := 0.9
+const DRAG_LIFT_CAP := 0.97
+
 var def: PropDef
 var net_position := Vector3.ZERO
 var net_rotation := Quaternion.IDENTITY
 var net_value := 0
 ## Quem está segurando, em ordem de chegada. Replicado para o HUD de todos os peers.
 var net_holder_ids := PackedInt32Array()
+## Razão de carga calculada no servidor; 0 sem ninguém segurando. Fonte única para HUD e velocidade.
+var net_load_ratio := 0.0
 
 ## peer_id -> Player. Somente no servidor.
 var holders: Dictionary = {}
@@ -73,9 +87,9 @@ func _physics_process(delta: float) -> void:
 		net_rotation = quaternion
 
 
-## Quantas pessoas de força normal são necessárias para tirar o objeto do chão.
+## Quantas pessoas de força normal são necessárias para tirar o objeto do chão (r >= 1,02).
 func people_needed() -> int:
-	return maxi(ceili(_weight() / GRIP_FORCE), 1)
+	return maxi(ceili(_weight() * RATIO_LIFT / GRIP_FORCE), 1)
 
 
 ## Quantas pessoas de força normal ainda faltam, considerando os braços de quem já segura.
@@ -87,7 +101,53 @@ func people_missing() -> int:
 		var player := Game.players.get(peer_id) as Player
 		if player:
 			force += player.get_grip_force()
-	return maxi(ceili((_weight() - force) / GRIP_FORCE), 0)
+	return maxi(ceili((_weight() * RATIO_LIFT - force) / GRIP_FORCE), 0)
+
+
+func get_load_ratio() -> float:
+	return net_load_ratio
+
+
+func get_load_zone() -> LoadZone:
+	if net_holder_ids.is_empty() and holders.is_empty():
+		return LoadZone.NONE
+	return zone_for_ratio(net_load_ratio)
+
+
+static func zone_for_ratio(ratio: float) -> LoadZone:
+	if ratio >= RATIO_EASY:
+		return LoadZone.EASY
+	if ratio >= RATIO_LIFT:
+		return LoadZone.STRAIN
+	if ratio >= RATIO_DRAG:
+		return LoadZone.DRAG
+	return LoadZone.IMMOBILE
+
+
+## Multiplicador de velocidade de quem carrega (spec 3.2). Imóvel não penaliza: o agarre solta pela distância.
+static func speed_mult_for_ratio(ratio: float) -> float:
+	if ratio >= 4.0:
+		return 1.0
+	if ratio >= RATIO_EASY:
+		return 0.75 + 0.25 * (ratio - RATIO_EASY) / (4.0 - RATIO_EASY)
+	if ratio >= RATIO_LIFT:
+		return 0.55 + 0.20 * (ratio - RATIO_LIFT) / (RATIO_EASY - RATIO_LIFT)
+	if ratio >= RATIO_DRAG:
+		return 0.25 + 0.20 * (ratio - RATIO_DRAG) / (RATIO_LIFT - RATIO_DRAG)
+	return 1.0
+
+
+static func zone_name(zone: LoadZone) -> String:
+	match zone:
+		LoadZone.EASY:
+			return "folga"
+		LoadZone.STRAIN:
+			return "esforço"
+		LoadZone.DRAG:
+			return "arrastando"
+		LoadZone.IMMOBILE:
+			return "imóvel"
+	return ""
 
 
 func _weight() -> float:
@@ -102,8 +162,11 @@ func _publish_holders() -> void:
 		net_holder_ids = ids
 
 
+## Sustentação vertical vem de um pool com a força de todos; só a sobra de cada um puxa na horizontal
+## para o próprio alvo. Assim a conta de r vale de verdade e o cabo de guerra horizontal continua.
 func _apply_holders() -> void:
-	angular_damp = 6.0 if not holders.is_empty() else 0.5
+	var active: Array[Player] = []
+	var total := 0.0
 	for peer_id: int in holders.keys():
 		var player := holders[peer_id] as Player
 		if not is_instance_valid(player) or not player.alive or not player.can_hold_props():
@@ -111,14 +174,44 @@ func _apply_holders() -> void:
 			if is_instance_valid(player):
 				player.grab_lost.rpc_id(peer_id)
 			continue
-		var target := player.get_hold_target()
-		if global_position.distance_to(target) > BREAK_RANGE:
+		if global_position.distance_to(player.get_hold_target()) > BREAK_RANGE:
 			holders.erase(peer_id)
 			player.grab_lost.rpc_id(peer_id)
 			continue
-		var acceleration := (target - global_position) * SPRING - linear_velocity * DAMPING
-		acceleration.y += get_gravity().length()
-		apply_central_force((acceleration * mass).limit_length(player.get_grip_force()))
+		active.append(player)
+		total += player.get_grip_force()
+	var ratio := total / _weight() if not active.is_empty() else 0.0
+	if not is_equal_approx(ratio, net_load_ratio):
+		net_load_ratio = ratio
+	var zone := zone_for_ratio(ratio) if not active.is_empty() else LoadZone.NONE
+	angular_damp = 0.5 if active.is_empty() else (2.0 if zone == LoadZone.STRAIN else 6.0)
+	if active.is_empty() or zone == LoadZone.IMMOBILE:
+		return
+	var lift := 0.0
+	if zone == LoadZone.DRAG:
+		lift = minf(total * DRAG_LIFT_SHARE, _weight() * DRAG_LIFT_CAP)
+	else:
+		var target_y := 0.0
+		var feet_y := 0.0
+		for player in active:
+			target_y += player.get_hold_target().y
+			feet_y += player.global_position.y
+		target_y /= active.size()
+		feet_y /= active.size()
+		if zone == LoadZone.STRAIN:
+			target_y = minf(target_y, feet_y + def.size.y * 0.5 + STRAIN_CLEARANCE)
+		var accel_y := (target_y - global_position.y) * SPRING - linear_velocity.y * DAMPING + get_gravity().length()
+		lift = clampf(accel_y * mass, -total, total)
+	var flat_velocity := Vector3(linear_velocity.x, 0.0, linear_velocity.z)
+	for player in active:
+		var grip := player.get_grip_force()
+		var lift_share := lift * grip / total
+		# Arrastar puxa com o corpo, não com os braços: a horizontal não disputa o orçamento vertical.
+		var budget := grip if zone == LoadZone.DRAG else sqrt(maxf(grip * grip - lift_share * lift_share, 0.0))
+		var to_target := player.get_hold_target() - global_position
+		to_target.y = 0.0
+		var pull := (to_target * SPRING - flat_velocity * DAMPING) * mass
+		apply_central_force(pull.limit_length(budget) + Vector3.UP * lift_share)
 
 
 func _on_body_entered(_body: Node) -> void:
