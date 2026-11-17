@@ -76,8 +76,8 @@ Para a soma valer na prática, `_apply_holders()` passa a usar um **orçamento v
 | Zona | Faixa de `r` | Comportamento | Velocidade dos carregadores |
 | :--- | :--- | :--- | :--- |
 | **Folga** | `r ≥ 1,35` | Objeto sobe até a mira e acompanha as curvas | `r ≥ 4`: `100%`; abaixo: `75% + 25% × (r − 1,35) / 2,65` |
-| **Esforço** | `1,02 ≤ r < 1,35` | Alvo desce para `0,9 m` do chão; `angular_damp` reduzido para o objeto balançar; sem corrida | `55% + 20% × (r − 1,02) / 0,33` |
-| **Arrasto** | `0,65 ≤ r < 1,02` | Alvo vertical no chão; o objeto raspa e sofre os efeitos da seção 3.5; sem corrida | `25% + 20% × (r − 0,65) / 0,37` |
+| **Esforço** | `1,02 ≤ r < 1,35` | A base do objeto sobe no máximo `0,5 m` acima dos pés de quem carrega; `angular_damp` reduzido para o objeto balançar; sem corrida | `55% + 20% × (r − 1,02) / 0,33` |
+| **Arrasto** | `0,65 ≤ r < 1,02` | O grupo alivia até 90% da força total contra o peso (no máximo 97% do peso), sem suspender o objeto, e puxa na horizontal com a pegada inteira; o objeto raspa e sofre os efeitos da seção 3.5; sem corrida | `25% + 20% × (r − 0,65) / 0,37` |
 | **Imóvel** | `r < 0,65` | O objeto não sai do lugar; o agarre solta ao passar de `BREAK_RANGE` (5,5 m) | Sem penalidade |
 
 O salto de `45%` para `55%` em `r = 1,02` marca o momento em que o objeto sai do chão. A fórmula substitui a penalidade atual `clampf(1 - massa / 120, 0,45, 1,0)` em `Player._update_movement`.
