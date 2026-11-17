@@ -16,10 +16,10 @@ const BASE_COLOR := Color(0.32, 0.08, 0.1, 1.0)
 const DEFAULT_BODY_PARTS: Dictionary = {
 	BodyPartDef.Slot.HEAD: "res://resources/body_parts/organic_head.tres",
 	BodyPartDef.Slot.TORSO: "res://resources/body_parts/organic_torso.tres",
-	BodyPartDef.Slot.LEFT_ARM: "res://resources/body_parts/forklift_arm.tres",
+	BodyPartDef.Slot.LEFT_ARM: "res://resources/body_parts/organic_left_arm.tres",
 	BodyPartDef.Slot.RIGHT_ARM: "res://resources/body_parts/organic_right_arm.tres",
 	BodyPartDef.Slot.LEFT_LEG: "res://resources/body_parts/organic_left_leg.tres",
-	BodyPartDef.Slot.RIGHT_LEG: "res://resources/body_parts/pneumatic_leg.tres",
+	BodyPartDef.Slot.RIGHT_LEG: "res://resources/body_parts/organic_right_leg.tres",
 }
 
 const DETACH_PRIORITY: Array[BodyPartDef.Slot] = [
@@ -101,6 +101,15 @@ func setup(data: Dictionary) -> void:
 	name = data.name
 	position = data.pos
 	net_position = data.pos
+	## Sobrescritas de partes sorteadas pelo servidor (opcional).
+	var overrides: Dictionary = data.get("parts", {})
+	for slot in overrides:
+		var path := String(overrides[slot])
+		var def := _load_part_def(path)
+		if def == null:
+			continue
+		body_parts[int(slot)] = path
+		body_part_values[int(slot)] = int((def.min_value + def.max_value) * 0.5)
 
 
 func _ready() -> void:
