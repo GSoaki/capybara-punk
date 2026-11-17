@@ -128,8 +128,11 @@ func _on_peer_joined(joined_peer_id: int) -> void:
 		_sync_body_parts.rpc_id(joined_peer_id, body_parts)
 
 
+## setup() roda antes de entrar na árvore; slots já preenchidos pelas partes sorteadas são mantidos.
 func _init_default_body_parts() -> void:
 	for slot: BodyPartDef.Slot in BodyPartDef.ALL_SLOTS:
+		if not String(body_parts.get(slot, "")).is_empty():
+			continue
 		var path: String = DEFAULT_BODY_PARTS[slot]
 		body_parts[slot] = path
 		var def := _load_part_def(path)
