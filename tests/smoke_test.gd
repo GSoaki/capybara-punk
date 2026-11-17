@@ -214,6 +214,7 @@ func run_host() -> void:
 	check("camera 3a pessoa ativa visuals e recuo", me.third_person and me.visuals.visible and me.camera.position.z > 0.2)
 	me.set_third_person(false)
 	check("camera 1a pessoa restaura visao", not me.third_person and not me.visuals.visible and is_zero_approx(me.camera.position.z))
+	await test_vital_swap_host(me, remote)
 
 	# Voz: frame do cliente chega ao host e gera barulho que o monstro escuta.
 	var heard := [0.0]
@@ -329,6 +330,50 @@ func test_drones_host(me: Player) -> void:
 	# Sai do caminho do resto do teste, que acontece no van.
 	drone.set_physics_process(false)
 	drone.global_position = Vector3(0.0, 2.0, -60.0)
+
+
+func test_vital_swap_host(me: Player, remote: Player) -> void:
+	# Ruído: raio = min(loudness * 180, 45).
+	check("ruído da corrida alcança 10,8 m", is_equal_approx(Game.noise_radius(Game.NOISE_SPRINT), 10.8))
+	check("teto da voz alcança 27 m", is_equal_approx(Game.noise_radius(Game.NOISE_VOICE_CAP), 27.0))
+	check("sobrecarga da mula alcança 45 m", is_equal_approx(Game.noise_radius(Game.NOISE_MULE_OVERLOAD), 45.0))
+	check("tiro 0,5 satura em 45 m", is_equal_approx(Game.noise_radius(0.5), 45.0))
+
+	# Slots vitais protegidos.
+	var next_slot := me.get_next_self_detach_slot()
+	check("autodestacar nunca escolhe cabeça ou torso", next_slot < 0 or not Player.is_vital_slot(next_slot))
+	check("cabeça e torso protegidos em vida", me.is_protected_slot(BodyPartDef.Slot.HEAD) and me.is_protected_slot(BodyPartDef.Slot.TORSO))
+
+	# Troca vital com canalização de 2 s.
+	me.velocity = Vector3.ZERO
+	var health_before := me.health
+	var head_prop: Prop = main.spawn_prop(load("res://resources/body_parts/scanner_head.tres"), me.global_position + Vector3(0.5, 0.5, 0.0), "TestScannerHead")
+	check("troca de cabeça inicia canalização", me.server_attach_part_from_prop(head_prop))
+	check("cabeça ainda não trocada durante canalização", not me.get_body_part_def(BodyPartDef.Slot.HEAD).resource_path.ends_with("scanner_head.tres"))
+	await pause(2.4)
+	check("troca vital conclui sem matar", me.alive and me.health == health_before)
+	check("cabeça scanner instalada", me.get_body_part_def(BodyPartDef.Slot.HEAD).resource_path.ends_with("scanner_head.tres"))
+	var dropped_head := false
+	for prop: Prop in main.props.get_children():
+		if prop.def is BodyPartDef and prop.def.resource_path.ends_with("organic_head.tres"):
+			dropped_head = true
+	check("cabeça orgânica antiga vira Prop", dropped_head)
+
+	# Dano durante a canalização cancela a troca.
+	me.velocity = Vector3.ZERO
+	var torso_prop: Prop = main.spawn_prop(load("res://resources/body_parts/coil_torso.tres"), me.global_position + Vector3(0.5, 0.5, 0.0), "TestCoilTorso")
+	check("troca de torso inicia canalização", me.server_attach_part_from_prop(torso_prop))
+	await pause(0.5)
+	me.server_hit(5, Vector3.ZERO, 0.1)
+	await pause(2.0)
+	check("dano cancela a troca de torso", not me.get_body_part_def(BodyPartDef.Slot.TORSO).resource_path.ends_with("coil_torso.tres") and me.alive)
+
+	# Limpeza: restaura vida e remove membros soltos para não atrapalhar mira e arremessos.
+	me.health = 100
+	for prop: Prop in main.props.get_children():
+		if prop.def is BodyPartDef:
+			prop.queue_free()
+	await pause(0.1)
 
 
 func test_weapons_host(me: Player, remote: Player, monster: Monster, crate: Prop) -> void:
