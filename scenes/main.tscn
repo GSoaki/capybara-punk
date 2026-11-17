@@ -5,8 +5,7 @@
 [ext_resource type="Resource" path="res://resources/props/crate.tres" id="3"]
 [ext_resource type="Resource" path="res://resources/props/vase.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/props/server_rack.tres" id="5"]
-[ext_resource type="Resource" path="res://resources/body_parts/forklift_arm.tres" id="12"]
-[ext_resource type="Resource" path="res://resources/body_parts/pneumatic_leg.tres" id="13"]
+[ext_resource type="Resource" path="res://resources/loot/implant_pool.tres" id="40"]
 [ext_resource type="Script" uid="uid://5wbx3l22m34t" path="res://scripts/world/level_generator.gd" id="6"]
 [ext_resource type="Script" uid="uid://b035o38txmdxf" path="res://scripts/world/lever.gd" id="7"]
 [ext_resource type="Script" uid="uid://b2y6uewr236fj" path="res://scripts/world/extraction_zone.gd" id="8"]
@@ -46,7 +45,8 @@ emission_energy_multiplier = 0.4
 
 [node name="Main" type="Node3D" unique_id=1564247306]
 script = ExtResource("1")
-loot_table = Array[ExtResource("2")]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("12"), ExtResource("13")])
+implant_pool = ExtResource("40")
+loot_table = Array[ExtResource("2")]([ExtResource("3"), ExtResource("4"), ExtResource("5")])
 lobby_items = Array[ExtResource("20")]([ExtResource("21"), ExtResource("24"), ExtResource("22"), ExtResource("23")])
 item_table = Array[ExtResource("20")]([ExtResource("21"), ExtResource("22"), ExtResource("23"), ExtResource("24")])
 

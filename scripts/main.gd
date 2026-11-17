@@ -10,6 +10,8 @@ const ITEM_SCENE := preload("res://scenes/item.tscn")
 const DRONE_SCENE := preload("res://scenes/drone.tscn")
 
 @export var loot_table: Array[PropDef] = []
+## Pool de implantes (chance por spot de prop e verdes aleatórios do monstro).
+@export var implant_pool: ImplantPool
 @export var monster_count := 1
 @export var drone_count := 2
 ## Salas em cada circuito de drone.
@@ -191,17 +193,47 @@ func _on_run_started(level_seed: int) -> void:
 	for def in loot_table:
 		weights.append(def.spawn_weight)
 	for spot in level.prop_spots:
-		spawn_prop(loot_table[rng.rand_weighted(weights)], spot)
+		var def: PropDef = null
+		if implant_pool and rng.randf() < implant_pool.implant_chance:
+			def = implant_pool.pick(rng)
+		if def == null:
+			def = loot_table[rng.rand_weighted(weights)]
+		spawn_prop(def, spot)
 	_spawn_run_items(rng)
 	if not Game.enemies_disabled:
-		_spawn_enemies()
+		_spawn_enemies(rng)
 
 
-func _spawn_enemies() -> void:
+func _spawn_enemies(rng: RandomNumberGenerator = null) -> void:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
 	for i in monster_count:
 		_next_id += 1
-		$MonsterSpawner.spawn({"name": "Monster%d" % _next_id, "pos": level.monster_spot})
+		$MonsterSpawner.spawn({
+			"name": "Monster%d" % _next_id,
+			"pos": level.monster_spot,
+			"parts": _roll_monster_parts(rng),
+		})
 	_spawn_drones()
+
+
+## Sorteia 2 implantes verdes para o monstro: {slot_int: caminho}.
+func _roll_monster_parts(rng: RandomNumberGenerator) -> Dictionary:
+	var parts := {}
+	if implant_pool == null:
+		return parts
+	for i in 2:
+		var def := implant_pool.pick_green(rng)
+		if def == null:
+			continue
+		var slot: int = def.slot
+		if parts.has(slot):
+			slot = BodyPartDef.pair_slot(def.slot)
+			if slot < 0 or parts.has(slot):
+				continue
+		parts[slot] = def.resource_path
+	return parts
 
 
 func apply_enemies_disabled(disabled: bool) -> void:

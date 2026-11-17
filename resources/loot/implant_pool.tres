@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ImplantPool" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/loot/implant_pool.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/player/body_part_def.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/body_parts/forklift_arm.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/body_parts/pneumatic_leg.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/body_parts/scanner_head.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/body_parts/coil_torso.tres" id="6"]
+[ext_resource type="Resource" path="res://resources/body_parts/mule_arm.tres" id="7"]
+
+[resource]
+script = ExtResource("1")
+green = Array[ExtResource("2")]([ExtResource("3"), ExtResource("4")])
+blue = Array[ExtResource("2")]([ExtResource("5")])
+purple = Array[ExtResource("2")]([ExtResource("6")])
+gold = Array[ExtResource("2")]([ExtResource("7")])
+implant_chance = 0.08
+rarity_weights = PackedFloat32Array(60, 28, 9, 3)
