@@ -297,8 +297,8 @@ func _update_body_hud_modal(player: Player) -> void:
 			swatch.color = def.color
 			tag_lbl.text = "CYBER"
 			tag_lbl.modulate = Color(0.25, 0.92, 1.0)
-			name_lbl.text = def.display_name
-			name_lbl.modulate = Color.WHITE
+			name_lbl.text = "%s · %s" % [BodyPartDef.rarity_name(def.rarity), def.display_name]
+			name_lbl.modulate = BodyPartDef.rarity_color(def.rarity)
 			stat_lbl.text = _part_stat_text(slot, def)
 		else:
 			style.border_color = Color(0.38, 0.65, 0.42, 0.9)
@@ -318,14 +318,24 @@ func _update_body_hud_modal(player: Player) -> void:
 		]
 
 
+## Monta o texto de estatísticas da peça; modificadores só aparecem quando diferentes do padrão.
 func _part_stat_text(slot: BodyPartDef.Slot, def: BodyPartDef) -> String:
+	var parts := PackedStringArray()
 	if BodyPartDef.is_arm_slot(slot):
-		return "Pegada: +%d N" % roundi(def.grip_force)
-	if BodyPartDef.is_leg_slot(slot):
-		return "Vel: %d%%  |  Pulo: %d%%" % [roundi(def.leg_speed_factor * 100.0), roundi(def.leg_jump_factor * 100.0)]
-	if def.vital:
-		return "Órgão Vital"
-	return "Instalado"
+		parts.append("Pegada: +%d N" % roundi(def.grip_force))
+	elif BodyPartDef.is_leg_slot(slot):
+		parts.append("Vel: %d%%  |  Pulo: %d%%" % [roundi(def.leg_speed_factor * 100.0), roundi(def.leg_jump_factor * 100.0)])
+	elif def.vital:
+		parts.append("Órgão Vital")
+	else:
+		parts.append("Instalado")
+	if not is_zero_approx(def.damage_reduction):
+		parts.append("-%d%% dano" % roundi(def.damage_reduction * 100.0))
+	if not is_zero_approx(def.fall_speed_bonus):
+		parts.append("+%.1f m/s queda" % def.fall_speed_bonus)
+	if not is_equal_approx(def.move_speed_mult, 1.0):
+		parts.append("%+d%% vel." % roundi((def.move_speed_mult - 1.0) * 100.0))
+	return "  |  ".join(parts)
 
 
 func _update_hud_bar(loadout: Loadout) -> void:
