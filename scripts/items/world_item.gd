@@ -151,7 +151,7 @@ func _on_body_entered(body: Node) -> void:
 func _strike(body: Node, hit_velocity: Vector3) -> void:
 	if is_instance_valid(body):
 		var damage := roundi(hit_velocity.length() * BATON_DAMAGE_PER_MS)
-		body.server_hit(damage, hit_velocity * BATON_KNOCK_PER_MS + Vector3.UP * 2.0, BATON_STUN)
+		body.server_hit(damage, hit_velocity * BATON_KNOCK_PER_MS + Vector3.UP * 2.0, BATON_STUN, Game.HitSource.WEAPON)
 
 
 func _explode() -> void:
@@ -163,15 +163,15 @@ func _explode() -> void:
 		if player.alive:
 			var dir_force := _blast_push(center, player.global_position + Vector3.UP * 0.9)
 			if dir_force != Vector3.ZERO:
-				player.server_hit(0, dir_force, BLAST_STUN)
+				player.server_hit(0, dir_force, BLAST_STUN, Game.HitSource.EXPLOSION)
 	for monster: Monster in main.monsters.get_children():
 		var dir_force := _blast_push(center, monster.global_position + Vector3.UP * 1.1)
 		if dir_force != Vector3.ZERO:
-			monster.server_hit(0, dir_force, BLAST_STUN)
+			monster.server_hit(0, dir_force, BLAST_STUN, Game.HitSource.EXPLOSION)
 	for drone: Drone in main.drones.get_children():
 		var dir_force := _blast_push(center, drone.global_position)
 		if dir_force != Vector3.ZERO:
-			drone.server_hit(0, dir_force, BLAST_STUN)
+			drone.server_hit(0, dir_force, BLAST_STUN, Game.HitSource.EXPLOSION)
 	for prop: Prop in main.props.get_children():
 		var dir_force := _blast_push(center, prop.global_position)
 		if dir_force != Vector3.ZERO:

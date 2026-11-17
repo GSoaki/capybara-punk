@@ -602,7 +602,7 @@ func _strike(target: Object, direction: Vector3, damage: int, knock: float, stun
 		target.sleeping = false
 		target.apply_central_impulse(direction * prop_impulse)
 	elif target.has_method("server_hit"):
-		target.server_hit(damage, direction * knock + Vector3.UP, stun)
+		target.server_hit(damage, direction * knock + Vector3.UP, stun, Game.HitSource.WEAPON)
 
 
 @rpc("any_peer", "call_local", "reliable")

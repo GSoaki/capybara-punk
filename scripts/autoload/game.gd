@@ -16,21 +16,21 @@ const RESULTS_SECONDS := 6.0
 const BASE_QUOTA := 300
 const QUOTA_GROWTH := 1.35
 
-## Origem de um golpe recebido pelo jogador (ainda não usado).
+## Origem de um golpe recebido pelo jogador.
 enum HitSource { GENERIC, MONSTER, WEAPON, EXPLOSION, FALL, DISCHARGE }
-## Ganho de audição: alcance (m) por unidade de ruído (ainda não usado).
+## Ganho de audição: alcance (m) por unidade de ruído.
 const HEARING_GAIN := 180.0
-## Alcance máximo de audição dos monstros em metros (ainda não usado).
+## Alcance máximo de audição dos monstros em metros.
 const MAX_HEARING_RANGE := 45.0
 ## Ruído mínimo emitido pela voz (ainda não usado).
 const NOISE_VOICE_MIN := 0.015
-## Ruído emitido ao correr (ainda não usado).
+## Ruído emitido ao correr.
 const NOISE_SPRINT := 0.06
 ## Ruído emitido por pulso do scanner (ainda não usado).
 const NOISE_SCANNER_PULSE := 0.08
 ## Ruído emitido pela perna pneumática ao aterrissar ou correr exausto (ainda não usado).
 const NOISE_PNEUMATIC := 0.10
-## Teto de ruído da voz (ainda não usado).
+## Teto de ruído da voz.
 const NOISE_VOICE_CAP := 0.15
 ## Teto de ruído da voz com scanner instalado (ainda não usado).
 const NOISE_VOICE_CAP_SCANNER := 0.20
@@ -137,6 +137,11 @@ func check_all_dead() -> void:
 		if player.alive:
 			return
 	end_run()
+
+
+## Raio de audição (m) de um ruído de dada intensidade.
+func noise_radius(loudness: float) -> float:
+	return minf(loudness * HEARING_GAIN, MAX_HEARING_RANGE)
 
 
 func emit_noise(origin: Vector3, loudness: float) -> void:

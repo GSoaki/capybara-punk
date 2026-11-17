@@ -15,7 +15,6 @@ const KILL_PLANE_Y := -25.0
 const SAFE_FALL_SPEED := 11.0
 const FALL_DAMAGE_PER_MS := 12.0
 const PUSH_STRENGTH := 2.5
-const SPRINT_NOISE := 0.06
 const BODY_INTERACT_RANGE := 3.8
 const THIRD_PERSON_OFFSET := Vector3(0.4, 0.3, 2.6)
 const PlayerRigScript := preload("res://scripts/player/player_rig.gd")
@@ -571,7 +570,7 @@ func _physics_process(delta: float) -> void:
 		_noise_cooldown -= delta
 		if _noise_cooldown <= 0.0:
 			_noise_cooldown = 0.5
-			Game.emit_noise(global_position, SPRINT_NOISE)
+			Game.emit_noise(global_position, Game.NOISE_SPRINT)
 
 
 func _remote_physics(delta: float) -> void:
@@ -883,7 +882,7 @@ func _sync_body_parts(new_parts: Dictionary) -> void:
 
 
 ## Servidor: aplica dano e empurrão. O dono executa o empurrão, pois controla a física.
-func server_hit(damage: int, knock: Vector3, stun := 1.5) -> void:
+func server_hit(damage: int, knock: Vector3, stun := 1.5, _source: Game.HitSource = Game.HitSource.GENERIC) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	health = maxi(health - damage, 0)
@@ -968,7 +967,7 @@ func grab_lost() -> void:
 @rpc("any_peer", "call_local", "reliable")
 func _request_fall_damage(speed: float) -> void:
 	if multiplayer.is_server() and Net.sender_id() == peer_id:
-		server_hit(roundi((speed - SAFE_FALL_SPEED) * FALL_DAMAGE_PER_MS), Vector3.ZERO)
+		server_hit(roundi((speed - SAFE_FALL_SPEED) * FALL_DAMAGE_PER_MS), Vector3.ZERO, 1.5, Game.HitSource.FALL)
 
 
 func _set_alive(value: bool) -> void:
@@ -995,7 +994,7 @@ func _set_alive(value: bool) -> void:
 func send_voice(packet: PackedByteArray) -> void:
 	_voice_frame.rpc(packet)
 	if multiplayer.is_server():
-		Game.emit_noise(global_position, VoiceCodec.rms(VoiceCodec.decode(packet)))
+		Game.emit_noise(global_position, minf(VoiceCodec.rms(VoiceCodec.decode(packet)), Game.NOISE_VOICE_CAP))
 
 
 ## Canal 1 separa a voz do tráfego confiável. O servidor retransmite aos demais clientes.
@@ -1007,7 +1006,7 @@ func _voice_frame(packet: PackedByteArray) -> void:
 	voice_level = VoiceCodec.rms(samples)
 	voice_frames_received += 1
 	if multiplayer.is_server():
-		Game.emit_noise(global_position, voice_level)
+		Game.emit_noise(global_position, minf(voice_level, Game.NOISE_VOICE_CAP))
 	var listener := Game.local_player()
 	# Mortos falam apenas entre si; vivos não os escutam.
 	if not alive and listener and listener.alive:

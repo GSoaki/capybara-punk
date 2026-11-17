@@ -106,7 +106,7 @@ func _plan_path() -> bool:
 
 
 ## Servidor. Mesma assinatura de Player.server_hit, para as armas tratarem os dois igual.
-func server_hit(damage: int, knock: Vector3, stun := 1.5) -> void:
+func server_hit(damage: int, knock: Vector3, stun := 1.5, _source: Game.HitSource = Game.HitSource.GENERIC) -> void:
 	if not multiplayer.is_server() or health <= 0:
 		return
 	health = maxi(health - damage, 0)
