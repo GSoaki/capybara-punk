@@ -66,6 +66,9 @@ func _ready() -> void:
 	_shape.shape = box_shape
 	if multiplayer.is_server():
 		body_entered.connect(_on_body_entered)
+		var drag := PropDrag.new()
+		drag.name = "Drag"
+		add_child(drag)
 	else:
 		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
 		freeze = true
